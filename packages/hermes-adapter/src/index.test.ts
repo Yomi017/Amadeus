@@ -123,13 +123,13 @@ describe("Hermes adapter", () => {
     expect(reply.text.length).toBeLessThan(360);
   });
 
-  it("redacts unsafe user text in mock replies", () => {
+  it("does not echo unsafe user text in mock replies", () => {
     const reply = buildMockAssistantReply({
       id: "unsafe-user-text",
       messages: [{ role: "user", text: `open /home/${"local-user"}/.hermes/state` }]
     });
 
-    expect(reply.text).toContain("[redacted]");
     expect(reply.text).not.toContain(".hermes");
+    expect(reply.text).not.toContain("/home/");
   });
 });

@@ -116,9 +116,7 @@ export function createHermesAdapter(config: HermesAdapterConfig = {}, transport?
 
 export function buildMockAssistantReply(request: HermesChatRequest): AssistantReply {
   const userText = latestUserText(request);
-  const text = userText
-    ? `聞こえている。「${userText}」のことだな。今はまだ mock mode だが、そばにいる。`
-    : "ここにいる。用件を聞かせて。";
+  const text = userText ? "Mock reply received. Real Hermes and voice are next." : "Ready.";
 
   return {
     id: makeReplyId(request),

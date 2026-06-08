@@ -3,6 +3,11 @@
   "identifier": "default",
   "description": "Default capability for the Amadeus desktop window.",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": [
+    "core:default",
+    "core:window:allow-set-always-on-top",
+    "core:window:allow-set-skip-taskbar",
+    "core:window:allow-set-visible-on-all-workspaces",
+    "core:window:allow-start-dragging"
+  ]
 }
-

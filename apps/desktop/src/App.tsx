@@ -1,6 +1,7 @@
-import { useReducer } from "react";
+import { useEffect, useReducer } from "react";
 import type { ChatMessage } from "@amadeus/core";
 import { initialChatShellState, reduceChatShellState } from "./chat-shell";
+import { ensurePetWindowMode } from "./pet-window-mode";
 import { getPrivateCharacterImage } from "./private-character";
 import { dragCurrentWindow } from "./window-drag";
 
@@ -8,6 +9,10 @@ export function App() {
   const [state, dispatch] = useReducer(reduceChatShellState, initialChatShellState);
   const privateCharacter = getPrivateCharacterImage();
   const latestAssistantMessage = [...state.messages].reverse().find((message) => message.role === "assistant");
+
+  useEffect(() => {
+    ensurePetWindowMode();
+  }, []);
 
   function sendMessage() {
     dispatch({
@@ -18,19 +23,21 @@ export function App() {
   }
 
   return (
-    <main className="amadeus-shell" onPointerDown={dragCurrentWindow}>
-      <section className="pet-stage" aria-label="Desktop pet">
+    <main className="amadeus-shell" data-tauri-drag-region="deep" onMouseDown={dragCurrentWindow}>
+      <section className="pet-stage" aria-label="Desktop pet" data-tauri-drag-region="deep">
         <div
           className={`character-frame emotion-${state.character.emotion} ${
             privateCharacter.enabled ? "has-private-character" : "uses-fallback-character"
           } ${state.rendererClassName}`}
-          onPointerDown={dragCurrentWindow}
+          data-tauri-drag-region="deep"
+          onMouseDown={dragCurrentWindow}
         >
           {privateCharacter.enabled ? (
             <img
               className={`private-character ${state.character.speaking ? "is-speaking" : ""}`}
               src={privateCharacter.src}
               alt="Character"
+              data-tauri-drag-region="deep"
               draggable={false}
             />
           ) : (
@@ -54,6 +61,8 @@ export function App() {
 
       <form
         className="quick-composer"
+        data-tauri-drag-region="false"
+        onMouseDown={(event) => event.stopPropagation()}
         onPointerDown={(event) => event.stopPropagation()}
         onSubmit={(event) => {
           event.preventDefault();
@@ -64,7 +73,7 @@ export function App() {
           aria-label="Message"
           value={state.input}
           onChange={(event) => dispatch({ type: "set-input", value: event.currentTarget.value })}
-          placeholder="話しかける..."
+          placeholder="Type..."
         />
         <button type="submit">Send</button>
       </form>
@@ -78,7 +87,12 @@ interface ReplyBubbleProps {
 
 function ReplyBubble({ message }: ReplyBubbleProps) {
   return (
-    <article className="reply-bubble" onPointerDown={(event) => event.stopPropagation()}>
+    <article
+      className="reply-bubble"
+      data-tauri-drag-region="false"
+      onMouseDown={(event) => event.stopPropagation()}
+      onPointerDown={(event) => event.stopPropagation()}
+    >
       <p>{message.text}</p>
       <span>{message.speechState === "mock-speaking" ? "speaking..." : "ready"}</span>
     </article>

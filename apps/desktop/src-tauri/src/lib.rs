@@ -1,4 +1,5 @@
 use serde::Serialize;
+use tauri::Manager;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -35,6 +36,15 @@ fn set_pet_window_mode(mode: String) -> String {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .setup(|app| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.set_always_on_top(true);
+                let _ = window.set_skip_taskbar(true);
+                let _ = window.set_visible_on_all_workspaces(true);
+            }
+
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             get_app_status,
             open_chat_window,

@@ -98,7 +98,7 @@ describe("chat shell reducer", () => {
   });
 
   it("returns a local fallback reply for empty text", () => {
-    expect(buildMockAssistantReply(" ")).toContain("ここにいる");
+    expect(buildMockAssistantReply(" ")).toContain("Ready.");
   });
 
   it("does not send empty messages", () => {
