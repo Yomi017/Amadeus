@@ -2,7 +2,8 @@ export type AmadeusStage =
   | "stage-1-scaffold"
   | "stage-2-desktop-shell"
   | "stage-3-core-hermes-adapter"
-  | "stage-4-gpt-sovits-tts-provider";
+  | "stage-4-gpt-sovits-tts-provider"
+  | "stage-5-static-renderer-boundary";
 
 export type ServiceState = "available" | "mock" | "offline" | "degraded" | "blocked";
 
@@ -140,7 +141,37 @@ export interface TtsProvider {
   synthesize(request: TtsSynthesisRequest): Promise<SafeAdapterResult<TtsSynthesisResult>>;
 }
 
-export const AMADEUS_STAGE: AmadeusStage = "stage-4-gpt-sovits-tts-provider";
+export type StaticRendererMode = "fallback" | "private-image";
+export type StaticRendererSourceKind = "css-fallback" | "private-file";
+
+export interface StaticRendererConfig {
+  readonly mode?: StaticRendererMode;
+  readonly privateImagePath?: string;
+  readonly label?: string;
+}
+
+export interface StaticRendererAssetDescriptor {
+  readonly id: string;
+  readonly sourceKind: StaticRendererSourceKind;
+  readonly label: string;
+  readonly safeDescription: string;
+}
+
+export interface StaticRendererSnapshot {
+  readonly asset: StaticRendererAssetDescriptor;
+  readonly character: CharacterState;
+  readonly className: string;
+  readonly speakingClassName: string;
+}
+
+export interface StaticCharacterRenderer {
+  readonly mode: StaticRendererMode;
+  readonly config: StaticRendererConfig;
+  status(): Promise<ServiceStatus>;
+  snapshot(state: CharacterState): SafeAdapterResult<StaticRendererSnapshot>;
+}
+
+export const AMADEUS_STAGE: AmadeusStage = "stage-5-static-renderer-boundary";
 
 export const STAGE_2_SERVICE_STATUSES: readonly ServiceStatus[] = [
   {
@@ -214,6 +245,33 @@ export const STAGE_4_SERVICE_STATUSES: readonly ServiceStatus[] = [
     label: "Renderer",
     state: "mock",
     detail: "Static fallback renderer"
+  },
+  {
+    id: "assets",
+    label: "Assets",
+    state: "blocked",
+    detail: "Private character assets excluded"
+  }
+];
+
+export const STAGE_5_SERVICE_STATUSES: readonly ServiceStatus[] = [
+  {
+    id: "hermes",
+    label: "Hermes",
+    state: "mock",
+    detail: "Core adapter mock ready"
+  },
+  {
+    id: "tts",
+    label: "TTS",
+    state: "mock",
+    detail: "GPT-SoVITS HTTP provider boundary ready"
+  },
+  {
+    id: "renderer",
+    label: "Renderer",
+    state: "mock",
+    detail: "Static fallback renderer boundary ready"
   },
   {
     id: "assets",

@@ -1,5 +1,6 @@
 import { useReducer } from "react";
-import { AMADEUS_STAGE, STAGE_4_SERVICE_STATUSES, type ChatMessage } from "@amadeus/core";
+import { AMADEUS_STAGE, STAGE_5_SERVICE_STATUSES, type ChatMessage } from "@amadeus/core";
+import { FALLBACK_ASSET_DESCRIPTOR } from "@amadeus/renderer-static";
 import { initialChatShellState, reduceChatShellState } from "./chat-shell";
 
 export function App() {
@@ -38,11 +39,12 @@ export function App() {
             <div className="body" />
             <div className="ribbon" />
           </div>
+          <span className="asset-label">{FALLBACK_ASSET_DESCRIPTOR.label}</span>
           <div className="character-shadow" />
         </div>
 
         <div className="status-strip">
-          {STAGE_4_SERVICE_STATUSES.map((service) => (
+          {STAGE_5_SERVICE_STATUSES.map((service) => (
             <div className={`status-pill state-${service.state}`} key={service.id}>
               <span>{service.label}</span>
               <strong>{service.detail}</strong>

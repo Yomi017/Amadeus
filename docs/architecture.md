@@ -2,7 +2,7 @@
 
 ## Current Stage
 
-Amadeus is currently at Stage 4: GPT-SoVITS TTS provider boundary. Stage 1 established the monorepo skeleton; Stage 2 added a local mock desktop pet screen, chat panel, service status display, fallback character preview, and local speech-like UI actions. Stage 3 added provider-shaped Hermes contracts and a safe mock/real adapter boundary. Stage 4 adds GPT-SoVITS TTS contracts, a local HTTP provider, and a configurable service script without committing private voice or model material.
+Amadeus is currently at Stage 5: static renderer boundary. Stage 1 established the monorepo skeleton; Stage 2 added a local mock desktop pet screen, chat panel, service status display, fallback character preview, and local speech-like UI actions. Stage 3 added provider-shaped Hermes contracts and a safe mock/real adapter boundary. Stage 4 added GPT-SoVITS TTS contracts, a local HTTP provider, and a configurable service script without committing private voice or model material. Stage 5 adds a rights-clean static renderer boundary and private asset path guardrails without loading proprietary character assets.
 
 ## Runtime Shape
 
@@ -21,9 +21,9 @@ Amadeus is organized as a Tauri v2 desktop app with a React and TypeScript front
 
 `@amadeus/tts-gpt-sovits` implements the Stage 4 GPT-SoVITS boundary. Mock mode is deterministic and local. HTTP mode only talks to an explicitly configured local endpoint; it does not read model weights, reference audio, generated audio, or private paths from package code.
 
-`@amadeus/renderer-static` is reserved for static renderer helpers and package-owned renderer metadata. It must not contain proprietary model, character, voice, CG, or extracted game assets.
+`@amadeus/renderer-static` implements the Stage 5 static renderer boundary. It exports rights-clean fallback metadata and renderer state helpers. Private character image paths are treated as configuration-only and are not read, copied, rendered, or committed in Stage 5.
 
-`@amadeus/desktop` composes the packages into a Tauri application shell. The current React screen provides the rights-clean mock UI, uses the Hermes adapter mock reply helper, and can use TTS provider status/results through the package boundary without loading private model files. Full audio playback and speaking-state synchronization remain deferred.
+`@amadeus/desktop` composes the packages into a Tauri application shell. The current React screen provides the rights-clean mock UI, uses the Hermes adapter mock reply helper, can use TTS provider status/results through the package boundary without loading private model files, and displays the static fallback renderer descriptor. Full audio playback and speaking-state synchronization remain deferred.
 
 ## Security and Asset Hygiene
 
@@ -65,7 +65,15 @@ Stage 4 is limited to:
 - mock TTS result behavior for UI and testability
 - docs for running a private local service outside Git
 
-Stages 5-6 remain deferred:
+Stage 5 is limited to:
+
+- static renderer request/snapshot/config contracts
+- rights-clean CSS fallback asset descriptor
+- private image path guardrails and redaction
+- renderer status/snapshot tests
+- desktop fallback descriptor display
+
+Stage 6 remains deferred:
 
 - private static character asset loading
 - integrated chat -> TTS -> audio playback -> speaking state flow

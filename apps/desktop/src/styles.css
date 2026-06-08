@@ -220,6 +220,21 @@ button:hover {
   filter: blur(8px);
 }
 
+.asset-label {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  max-width: min(72%, 260px);
+  border: 1px solid rgba(92, 80, 74, 0.14);
+  border-radius: 8px;
+  padding: 6px 8px;
+  background: rgba(255, 253, 249, 0.76);
+  color: #6e5652;
+  font-size: 0.72rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
 .status-strip {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
