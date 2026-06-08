@@ -3,7 +3,8 @@ export type AmadeusStage =
   | "stage-2-desktop-shell"
   | "stage-3-core-hermes-adapter"
   | "stage-4-gpt-sovits-tts-provider"
-  | "stage-5-static-renderer-boundary";
+  | "stage-5-static-renderer-boundary"
+  | "stage-6-v0-integration-skeleton";
 
 export type ServiceState = "available" | "mock" | "offline" | "degraded" | "blocked";
 
@@ -17,6 +18,14 @@ export interface ServiceStatus {
 
 export type ChatRole = "user" | "assistant" | "system";
 export type ChatMessageStatus = "pending" | "complete" | "cancelled";
+export type SpeechJobState = "idle" | "queued" | "mock-speaking" | "stopped" | "complete";
+
+export interface SpeechJob {
+  readonly id: string;
+  readonly state: SpeechJobState;
+  readonly text: string;
+  readonly result?: TtsSynthesisResult;
+}
 
 export interface ChatMessage {
   readonly id: string;
@@ -24,7 +33,9 @@ export interface ChatMessage {
   readonly text: string;
   readonly status: ChatMessageStatus;
   readonly createdAt: string;
-  readonly speechState?: "idle" | "mock-speaking" | "stopped";
+  readonly speechState?: SpeechJobState;
+  readonly speechJob?: SpeechJob;
+  readonly rendererClassName?: string;
 }
 
 export type CharacterEmotion = "neutral" | "soft" | "happy" | "focused";
@@ -171,7 +182,7 @@ export interface StaticCharacterRenderer {
   snapshot(state: CharacterState): SafeAdapterResult<StaticRendererSnapshot>;
 }
 
-export const AMADEUS_STAGE: AmadeusStage = "stage-5-static-renderer-boundary";
+export const AMADEUS_STAGE: AmadeusStage = "stage-6-v0-integration-skeleton";
 
 export const STAGE_2_SERVICE_STATUSES: readonly ServiceStatus[] = [
   {
@@ -272,6 +283,33 @@ export const STAGE_5_SERVICE_STATUSES: readonly ServiceStatus[] = [
     label: "Renderer",
     state: "mock",
     detail: "Static fallback renderer boundary ready"
+  },
+  {
+    id: "assets",
+    label: "Assets",
+    state: "blocked",
+    detail: "Private character assets excluded"
+  }
+];
+
+export const STAGE_6_SERVICE_STATUSES: readonly ServiceStatus[] = [
+  {
+    id: "hermes",
+    label: "Hermes",
+    state: "mock",
+    detail: "Mock reply flow wired"
+  },
+  {
+    id: "tts",
+    label: "TTS",
+    state: "mock",
+    detail: "Mock speech job metadata wired"
+  },
+  {
+    id: "renderer",
+    label: "Renderer",
+    state: "mock",
+    detail: "Static renderer state wired"
   },
   {
     id: "assets",

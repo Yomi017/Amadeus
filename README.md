@@ -2,7 +2,7 @@
 
 Amadeus is a Tauri v2, React, and TypeScript monorepo for a Hermes-based desktop pet.
 
-This repository is currently at Stage 5: static renderer boundary. The app has a rights-clean local mock desktop pet screen, service status strip, chat panel, local replay/stop-speech state, a provider-shaped Hermes adapter, a GPT-SoVITS HTTP TTS boundary, and a static fallback renderer boundary. Real Hermes chat, Live2D rendering, private character asset loading, generated audio commits, and full chat-to-audio playback integration are still deferred.
+This repository is currently at Stage 6: v0 integration skeleton. The app has a rights-clean local mock desktop pet screen, service status strip, chat panel, local replay/stop-speech state, a provider-shaped Hermes adapter, a GPT-SoVITS HTTP TTS boundary, a static fallback renderer boundary, and a mock chat-to-speech-metadata-to-renderer flow. Real Hermes chat, Live2D rendering, private character asset loading, generated audio commits, and real audio playback are still deferred.
 
 ## Workspace Layout
 
@@ -34,5 +34,5 @@ The repository intentionally ignores proprietary assets, extracted game material
 
 - Hermes real mode requires an injected transport and does not auto-discover private Hermes files.
 - TTS real mode requires an explicitly configured local HTTP endpoint and does not read model files from the frontend package.
-- Character rendering uses a CSS fallback silhouette; private character image paths are configuration-only and not loaded in Stage 5.
+- Character rendering uses a CSS fallback silhouette; private character image paths are configuration-only and not loaded in Stage 6.
 - Full Tauri native build currently requires Linux system packages such as `pkg-config` and `libdbus-1-dev`.

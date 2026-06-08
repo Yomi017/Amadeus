@@ -1,5 +1,5 @@
 import { useReducer } from "react";
-import { AMADEUS_STAGE, STAGE_5_SERVICE_STATUSES, type ChatMessage } from "@amadeus/core";
+import { AMADEUS_STAGE, STAGE_6_SERVICE_STATUSES, type ChatMessage } from "@amadeus/core";
 import { FALLBACK_ASSET_DESCRIPTOR } from "@amadeus/renderer-static";
 import { initialChatShellState, reduceChatShellState } from "./chat-shell";
 
@@ -27,7 +27,7 @@ export function App() {
           </button>
         </div>
 
-        <div className={`character-frame emotion-${state.character.emotion}`}>
+        <div className={`character-frame emotion-${state.character.emotion} ${state.rendererClassName}`}>
           <div className={`fallback-character ${state.character.speaking ? "is-speaking" : ""}`}>
             <div className="hair hair-left" />
             <div className="hair hair-right" />
@@ -44,7 +44,7 @@ export function App() {
         </div>
 
         <div className="status-strip">
-          {STAGE_5_SERVICE_STATUSES.map((service) => (
+          {STAGE_6_SERVICE_STATUSES.map((service) => (
             <div className={`status-pill state-${service.state}`} key={service.id}>
               <span>{service.label}</span>
               <strong>{service.detail}</strong>
@@ -115,6 +115,12 @@ function MessageBubble({ message, onReplay, onStop }: MessageBubbleProps) {
         <span>{message.status}</span>
       </div>
       <p>{message.text}</p>
+      {message.speechJob?.result ? (
+        <div className="speech-meta">
+          <span>{message.speechJob.state}</span>
+          <code>{message.speechJob.result.audioUrl}</code>
+        </div>
+      ) : null}
       {message.role === "assistant" ? (
         <div className="message-actions">
           <button type="button" onClick={onReplay}>

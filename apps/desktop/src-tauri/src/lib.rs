@@ -12,7 +12,7 @@ struct AppStatus {
 #[tauri::command]
 fn get_app_status() -> AppStatus {
     AppStatus {
-        stage: "stage-5-static-renderer-boundary",
+        stage: "stage-6-v0-integration-skeleton",
         hermes_mode: "mock",
         tts_mode: "mock",
         renderer_mode: "static-fallback",

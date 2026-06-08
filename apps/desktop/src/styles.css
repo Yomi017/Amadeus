@@ -347,6 +347,21 @@ button:hover {
   margin-top: 8px;
 }
 
+.speech-meta {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+  border-top: 1px solid rgba(92, 80, 74, 0.12);
+  padding-top: 8px;
+  color: #7d635d;
+  font-size: 0.72rem;
+}
+
+.speech-meta code {
+  overflow-wrap: anywhere;
+  color: #4f4547;
+}
+
 .message-actions button,
 .composer-actions button {
   min-height: 32px;

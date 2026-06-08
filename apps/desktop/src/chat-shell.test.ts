@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildMockAssistantReply, initialChatShellState, reduceChatShellState } from "./chat-shell";
+import { buildMockAssistantReply, buildMockSpeechJob, initialChatShellState, reduceChatShellState } from "./chat-shell";
 
 describe("chat shell reducer", () => {
   it("creates user and mock assistant messages without external services", () => {
@@ -13,6 +13,8 @@ describe("chat shell reducer", () => {
     expect(next.messages[1]?.role).toBe("user");
     expect(next.messages[2]?.role).toBe("assistant");
     expect(next.character.speaking).toBe(true);
+    expect(next.activeSpeechJob?.result?.audioUrl).toContain("amadeus-mock://tts/");
+    expect(next.rendererClassName).toContain("speech-speaking");
     expect(next.input).toBe("");
   });
 
@@ -26,6 +28,31 @@ describe("chat shell reducer", () => {
 
     expect(stopped.character.speaking).toBe(false);
     expect(stopped.messages.at(-1)?.speechState).toBe("stopped");
+    expect(stopped.activeSpeechJob?.state).toBe("stopped");
+    expect(stopped.rendererClassName).toContain("speech-idle");
+  });
+
+  it("replays assistant speech metadata locally", () => {
+    const speaking = reduceChatShellState(initialChatShellState, {
+      type: "send",
+      text: "もう一度",
+      now: "2026-06-08T00:00:00.000Z"
+    });
+    const replayed = reduceChatShellState(speaking, {
+      type: "replay",
+      messageId: speaking.messages.at(-1)?.id ?? "missing"
+    });
+
+    expect(replayed.character.speaking).toBe(true);
+    expect(replayed.messages.at(-1)?.speechJob?.state).toBe("mock-speaking");
+    expect(replayed.rendererClassName).toContain("speech-speaking");
+  });
+
+  it("builds mock speech job metadata without generating audio", () => {
+    const job = buildMockSpeechJob("assistant-1", "hello", "2026-06-08T00:00:00.000Z");
+
+    expect(job.state).toBe("mock-speaking");
+    expect(job.result?.audioUrl).toBe("amadeus-mock://tts/assistant-1-speech.wav");
   });
 
   it("returns a local fallback reply for empty text", () => {
