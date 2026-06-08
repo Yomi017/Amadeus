@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "types": ["vite/client"],
+    "baseUrl": ".",
+    "paths": {
+      "@amadeus/core": ["../../packages/core/src/index.ts"],
+      "@amadeus/hermes-adapter": ["../../packages/hermes-adapter/src/index.ts"],
+      "@amadeus/renderer-static": ["../../packages/renderer-static/src/index.ts"],
+      "@amadeus/tts-gpt-sovits": ["../../packages/tts-gpt-sovits/src/index.ts"]
+    }
+  },
+  "include": ["src", "vite.config.ts"]
+}

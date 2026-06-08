@@ -1,0 +1,29 @@
+{
+  "name": "@amadeus/desktop",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "dev:vite": "vite --host 127.0.0.1 --port 1420",
+    "build:vite": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@amadeus/core": "0.0.0",
+    "@amadeus/hermes-adapter": "0.0.0",
+    "@amadeus/renderer-static": "0.0.0",
+    "@amadeus/tts-gpt-sovits": "0.0.0",
+    "@tauri-apps/api": "^2.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0"
+  }
+}
