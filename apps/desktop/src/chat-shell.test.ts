@@ -48,6 +48,48 @@ describe("chat shell reducer", () => {
     expect(replayed.rendererClassName).toContain("speech-speaking");
   });
 
+  it("keeps only one assistant speech job active across sends", () => {
+    const first = reduceChatShellState(initialChatShellState, {
+      type: "send",
+      text: "最初",
+      now: "2026-06-08T00:00:00.000Z"
+    });
+    const second = reduceChatShellState(first, {
+      type: "send",
+      text: "次",
+      now: "2026-06-08T00:00:01.000Z"
+    });
+
+    const speakingMessages = second.messages.filter((message) => message.speechState === "mock-speaking");
+
+    expect(speakingMessages).toHaveLength(1);
+    expect(second.messages[2]?.speechState).toBe("stopped");
+    expect(second.activeSpeechJob?.state).toBe("mock-speaking");
+  });
+
+  it("stops previous active speech when replaying another assistant message", () => {
+    const first = reduceChatShellState(initialChatShellState, {
+      type: "send",
+      text: "最初",
+      now: "2026-06-08T00:00:00.000Z"
+    });
+    const second = reduceChatShellState(first, {
+      type: "send",
+      text: "次",
+      now: "2026-06-08T00:00:01.000Z"
+    });
+    const replayedFirst = reduceChatShellState(second, {
+      type: "replay",
+      messageId: second.messages[2]?.id ?? "missing"
+    });
+
+    const speakingMessages = replayedFirst.messages.filter((message) => message.speechState === "mock-speaking");
+
+    expect(speakingMessages).toHaveLength(1);
+    expect(replayedFirst.messages[2]?.speechState).toBe("mock-speaking");
+    expect(replayedFirst.messages.at(-1)?.speechState).toBe("stopped");
+  });
+
   it("builds mock speech job metadata without generating audio", () => {
     const job = buildMockSpeechJob("assistant-1", "hello", "2026-06-08T00:00:00.000Z");
 

@@ -76,6 +76,19 @@ export function buildRendererClassName(state: CharacterState): string {
   return `${snapshot.className} ${snapshot.speakingClassName}`;
 }
 
+export function stopActiveSpeechMessages(messages: readonly ChatMessage[], rendererClassName: string): readonly ChatMessage[] {
+  return messages.map((message) =>
+    message.speechState === "mock-speaking"
+      ? {
+          ...message,
+          speechState: "stopped",
+          speechJob: message.speechJob ? { ...message.speechJob, state: "stopped" } : undefined,
+          rendererClassName
+        }
+      : message
+  );
+}
+
 export function reduceChatShellState(state: ChatShellState, action: ChatShellAction): ChatShellState {
   switch (action.type) {
     case "set-input":
@@ -109,11 +122,12 @@ export function reduceChatShellState(state: ChatShellState, action: ChatShellAct
         pose: "replying"
       };
       const rendererClassName = buildRendererClassName(replyingCharacter);
+      const stoppedMessages = stopActiveSpeechMessages(state.messages, rendererClassName);
       return {
         ...state,
         input: "",
         messages: [
-          ...state.messages,
+          ...stoppedMessages,
           userMessage,
           {
             ...assistantMessage,
@@ -151,9 +165,10 @@ export function reduceChatShellState(state: ChatShellState, action: ChatShellAct
       const replaySpeechJob: SpeechJob = replayMessage.speechJob
         ? { ...replayMessage.speechJob, state: "mock-speaking" }
         : buildMockSpeechJob(replayMessage.id, replayMessage.text, replayMessage.createdAt);
+      const stoppedMessages = stopActiveSpeechMessages(state.messages, replayClassName);
       return {
         ...state,
-        messages: state.messages.map((message) =>
+        messages: stoppedMessages.map((message) =>
           message.id === action.messageId && message.role === "assistant"
             ? {
                 ...message,
@@ -177,16 +192,7 @@ export function reduceChatShellState(state: ChatShellState, action: ChatShellAct
       const idleClassName = buildRendererClassName(idleCharacter);
       return {
         ...state,
-        messages: state.messages.map((message) =>
-          message.speechState === "mock-speaking"
-            ? {
-                ...message,
-                speechState: "stopped",
-                speechJob: message.speechJob ? { ...message.speechJob, state: "stopped" } : undefined,
-                rendererClassName: idleClassName
-              }
-            : message
-        ),
+        messages: stopActiveSpeechMessages(state.messages, idleClassName),
         character: idleCharacter,
         rendererClassName: idleClassName,
         activeSpeechJob: state.activeSpeechJob ? { ...state.activeSpeechJob, state: "stopped" } : undefined

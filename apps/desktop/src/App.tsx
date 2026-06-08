@@ -118,7 +118,9 @@ function MessageBubble({ message, onReplay, onStop }: MessageBubbleProps) {
       {message.speechJob?.result ? (
         <div className="speech-meta">
           <span>{message.speechJob.state}</span>
-          <code>{message.speechJob.result.audioUrl}</code>
+          <code>
+            {message.speechJob.result.source}:{message.speechJob.result.format}
+          </code>
         </div>
       ) : null}
       {message.role === "assistant" ? (
