@@ -16,7 +16,8 @@ const HERMES_TIMEOUT: Duration = Duration::from_secs(90);
 const MAX_USER_TEXT_LENGTH: usize = 2_000;
 const MAX_HERMES_REPLY_LENGTH: usize = 4_000;
 const MAX_TTS_TEXT_LENGTH: usize = 500;
-const DEFAULT_TTS_ENDPOINT: &str = "http://127.0.0.1:48162";
+const DEFAULT_GPT_SOVITS_TTS_ENDPOINT: &str = "http://127.0.0.1:48162";
+const DEFAULT_GENIE_ONNX_TTS_ENDPOINT: &str = "http://127.0.0.1:48163";
 const TTS_TIMEOUT: Duration = Duration::from_secs(180);
 
 #[derive(Serialize)]
@@ -128,6 +129,42 @@ struct TtsResultDto {
     cached: Option<bool>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum TtsEngine {
+    PyGptSovits,
+    GenieOnnx,
+}
+
+impl TtsEngine {
+    fn from_env_value(value: Option<String>) -> Result<Self, String> {
+        match value
+            .as_deref()
+            .unwrap_or("py-gpt-sovits")
+            .trim()
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "" | "py-gpt-sovits" | "gpt-sovits" => Ok(Self::PyGptSovits),
+            "genie-onnx" | "genie" => Ok(Self::GenieOnnx),
+            _ => Err("Unsupported TTS engine".to_string()),
+        }
+    }
+
+    fn source(self) -> &'static str {
+        match self {
+            Self::PyGptSovits => "gpt-sovits",
+            Self::GenieOnnx => "genie-onnx",
+        }
+    }
+
+    fn default_endpoint(self) -> &'static str {
+        match self {
+            Self::PyGptSovits => DEFAULT_GPT_SOVITS_TTS_ENDPOINT,
+            Self::GenieOnnx => DEFAULT_GENIE_ONNX_TTS_ENDPOINT,
+        }
+    }
+}
+
 #[tauri::command]
 fn send_chat_message(request: SendChatMessageRequest) -> Result<AssistantReplyDto, String> {
     let user_text = clean_user_text(&request.text, MAX_USER_TEXT_LENGTH)?;
@@ -170,7 +207,8 @@ fn send_chat_message(request: SendChatMessageRequest) -> Result<AssistantReplyDt
 
 #[tauri::command]
 fn synthesize_speech(request: TtsRequestDto) -> Result<TtsResultDto, String> {
-    let endpoint = std::env::var("AMADEUS_TTS_ENDPOINT").unwrap_or_else(|_| DEFAULT_TTS_ENDPOINT.to_string());
+    let engine = TtsEngine::from_env_value(std::env::var("AMADEUS_TTS_ENGINE").ok())?;
+    let endpoint = std::env::var("AMADEUS_TTS_ENDPOINT").unwrap_or_else(|_| engine.default_endpoint().to_string());
     let parsed_endpoint = parse_loopback_http_endpoint(&endpoint)?;
     let text = clean_user_text(&request.text, MAX_TTS_TEXT_LENGTH)?;
     if text.is_empty() {
@@ -191,16 +229,16 @@ fn synthesize_speech(request: TtsRequestDto) -> Result<TtsResultDto, String> {
     .to_string();
     let service_result = post_loopback_json(&parsed_endpoint, "/synthesize", &body, TTS_TIMEOUT)?;
     let value: TtsServiceResultDto =
-        serde_json::from_str(&service_result).map_err(|_| "GPT-SoVITS returned invalid JSON".to_string())?;
+        serde_json::from_str(&service_result).map_err(|_| "TTS service returned invalid JSON".to_string())?;
     let audio_url = clean_audio_url(&value.audio_url)?;
     if !is_allowed_tts_audio_url(&audio_url, parsed_endpoint.port) {
-        return Err("GPT-SoVITS returned an unsupported audio URL".to_string());
+        return Err("TTS service returned an unsupported audio URL".to_string());
     }
 
     Ok(TtsResultDto {
         id: clean_model_text(&value.id, 160)?,
         request_id: clean_model_text(&value.request_id, 160)?,
-        source: "gpt-sovits",
+        source: engine.source(),
         audio_url,
         format: value.format.unwrap_or_else(|| "wav".to_string()),
         mime_type: value.mime_type.unwrap_or_else(|| "audio/wav".to_string()),
@@ -351,13 +389,13 @@ fn parse_loopback_http_endpoint(endpoint: &str) -> Result<LoopbackEndpoint, Stri
 
 fn post_loopback_json(endpoint: &LoopbackEndpoint, path: &str, body: &str, timeout: Duration) -> Result<String, String> {
     let mut stream = std::net::TcpStream::connect((endpoint.host.as_str(), endpoint.port))
-        .map_err(|_| "GPT-SoVITS service is not reachable".to_string())?;
+        .map_err(|_| "TTS service is not reachable".to_string())?;
     stream
         .set_read_timeout(Some(timeout))
-        .map_err(|_| "Failed to set GPT-SoVITS read timeout".to_string())?;
+        .map_err(|_| "Failed to set TTS read timeout".to_string())?;
     stream
         .set_write_timeout(Some(timeout))
-        .map_err(|_| "Failed to set GPT-SoVITS write timeout".to_string())?;
+        .map_err(|_| "Failed to set TTS write timeout".to_string())?;
 
     let request = format!(
         "POST {} HTTP/1.1\r\nHost: {}:{}\r\nAccept: application/json\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
@@ -369,15 +407,15 @@ fn post_loopback_json(endpoint: &LoopbackEndpoint, path: &str, body: &str, timeo
     );
     stream
         .write_all(request.as_bytes())
-        .map_err(|_| "Failed to send GPT-SoVITS request".to_string())?;
+        .map_err(|_| "Failed to send TTS request".to_string())?;
 
     let mut response = String::new();
     std::io::Read::read_to_string(&mut stream, &mut response)
-        .map_err(|_| "Failed to read GPT-SoVITS response".to_string())?;
+        .map_err(|_| "Failed to read TTS response".to_string())?;
 
     let (headers, response_body) = response
         .split_once("\r\n\r\n")
-        .ok_or_else(|| "GPT-SoVITS returned an invalid HTTP response".to_string())?;
+        .ok_or_else(|| "TTS service returned an invalid HTTP response".to_string())?;
     let status_line = headers.lines().next().unwrap_or("");
     if !status_line.contains(" 200 ") {
         return Err(parse_service_error(response_body));
@@ -388,13 +426,13 @@ fn post_loopback_json(endpoint: &LoopbackEndpoint, path: &str, body: &str, timeo
 
 fn parse_service_error(response_body: &str) -> String {
     if let Ok(error) = serde_json::from_str::<ServiceErrorDto>(response_body) {
-        let label = error.error.unwrap_or_else(|| "GPT-SoVITS synthesis failed".to_string());
+        let label = error.error.unwrap_or_else(|| "TTS synthesis failed".to_string());
         let kind = error.error_kind.unwrap_or_else(|| "unknown".to_string());
         let id = error.error_id.unwrap_or_else(|| "no-id".to_string());
         return format!("{} ({} #{})", label, kind, id);
     }
 
-    "GPT-SoVITS synthesis failed".to_string()
+    "TTS synthesis failed".to_string()
 }
 
 fn clean_user_text(text: &str, max_length: usize) -> Result<String, String> {
@@ -593,6 +631,27 @@ mod tests {
     }
 
     #[test]
+    fn resolves_tts_engine_defaults() {
+        assert_eq!(
+            TtsEngine::from_env_value(None).expect("default engine").default_endpoint(),
+            DEFAULT_GPT_SOVITS_TTS_ENDPOINT
+        );
+        assert_eq!(
+            TtsEngine::from_env_value(Some("genie-onnx".to_string()))
+                .expect("genie engine")
+                .default_endpoint(),
+            DEFAULT_GENIE_ONNX_TTS_ENDPOINT
+        );
+        assert_eq!(
+            TtsEngine::from_env_value(Some("genie".to_string()))
+                .expect("genie alias")
+                .source(),
+            "genie-onnx"
+        );
+        assert!(TtsEngine::from_env_value(Some("remote".to_string())).is_err());
+    }
+
+    #[test]
     fn validates_tts_audio_url_shape() {
         assert!(is_allowed_tts_audio_url(
             "http://127.0.0.1:48162/audio/assistant-real-speech.wav",
@@ -605,6 +664,10 @@ mod tests {
         assert!(!is_allowed_tts_audio_url(
             "http://127.0.0.1:48163/audio/assistant-real-speech.wav",
             48162
+        ));
+        assert!(is_allowed_tts_audio_url(
+            "http://127.0.0.1:48163/audio/assistant-real-speech.wav",
+            48163
         ));
     }
 

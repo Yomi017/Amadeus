@@ -117,7 +117,7 @@ export interface HermesAdapter {
 
 export type TtsProviderMode = "mock" | "http";
 export type TtsAudioFormat = "wav";
-export type TtsResultSource = "mock" | "gpt-sovits";
+export type TtsResultSource = "mock" | "gpt-sovits" | "genie-onnx";
 
 export interface TtsSynthesisRequest {
   readonly id: string;

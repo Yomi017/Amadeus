@@ -37,6 +37,15 @@ npm run dev
 
 For real voice, replace dry-run with the private model/reference environment variables described in `docs/tts-gpt-sovits.md`. The desktop app calls Hermes through the local `hermes chat` CLI, and on Windows it uses `wsl.exe` to reach the WSL Hermes install.
 
+To test the optional Genie-TTS ONNX engine shape without loading a real model:
+
+```sh
+AMADEUS_TTS_DRY_RUN=1 python tools/tts/genie_http_service.py
+AMADEUS_TTS_ENGINE=genie-onnx npm run dev
+```
+
+For real Genie ONNX inference, first convert the private GPT-SoVITS checkpoints outside this repository, then run `tools/tts/genie_http_service.py` with the private paths described in `docs/tts-genie-onnx.md`.
+
 ## Local Private Character Image
 
 For local private prototyping, copy `.env.example` to `apps/desktop/.env.local` and set:

@@ -18,7 +18,7 @@ AMADEUS_TTS_ENGINE=genie-onnx
 AMADEUS_TTS_ENDPOINT=http://127.0.0.1:48163
 ```
 
-The desktop app only calls `AMADEUS_TTS_ENDPOINT`. `AMADEUS_TTS_ENGINE` is a label and launch hint for scripts and diagnostics.
+If `AMADEUS_TTS_ENDPOINT` is not set, the desktop app chooses the default endpoint from `AMADEUS_TTS_ENGINE`: `48162` for `py-gpt-sovits`, `48163` for `genie-onnx`.
 
 ## Local Paths
 
@@ -61,6 +61,8 @@ The Genie service must match the existing PyTorch service:
 Example:
 
 ```bash
+AMADEUS_TTS_DRY_RUN=1 python tools/tts/genie_http_service.py
+
 curl -s http://127.0.0.1:48163/synthesize \
   -H 'content-type: application/json' \
   -d '{"id":"genie-test","text":"おはよう。","locale":"ja"}'
