@@ -1,13 +1,13 @@
 # Amadeus
 
-Amadeus is a Tauri v2, React, and TypeScript monorepo scaffold for a Hermes-based Live2D desktop pet.
+Amadeus is a Tauri v2, React, and TypeScript monorepo for a Hermes-based desktop pet.
 
-This repository is currently at Stage 1: scaffold and repo hygiene. The checked-in files define the workspace layout, package boundaries, Tauri desktop shell skeleton, and documentation baseline. Stage 2 UI behavior is intentionally not implemented here.
+This repository is currently at Stage 2: desktop shell. The app has a rights-clean local mock desktop pet screen, service status strip, chat panel, and local replay/stop-speech state. Real Hermes chat, GPT-SoVITS synthesis, Live2D rendering, private character assets, and generated audio are still deferred.
 
 ## Workspace Layout
 
-- `apps/desktop` - Tauri v2 desktop application shell with a minimal React entry point.
-- `packages/core` - Shared domain primitives and cross-package types.
+- `apps/desktop` - Tauri v2 desktop application shell with React UI, mock chat, and fallback character preview.
+- `packages/core` - Shared domain primitives, service status, chat message, and character state types.
 - `packages/hermes-adapter` - Placeholder boundary for future Hermes integration.
 - `packages/tts-gpt-sovits` - Placeholder boundary for future GPT-SoVITS TTS integration.
 - `packages/renderer-static` - Placeholder boundary for static renderer assets and helpers.
@@ -24,9 +24,15 @@ npm run typecheck
 npm run test
 ```
 
-Dependencies are declared but not installed by this scaffold. Do not run `npm install` unless a later approved stage explicitly allows dependency installation.
+Dependencies are installed with npm workspaces and pinned by `package-lock.json`.
 
 ## Hygiene
 
 The repository intentionally ignores proprietary assets, extracted game materials, model weights, generated audio, runtime caches, and Hermes private state. Keep rights-sensitive materials out of Git.
 
+## Current Limits
+
+- Hermes is mock-only.
+- TTS is mock-only and does not generate or play audio.
+- Character rendering uses a CSS fallback silhouette, not private character assets.
+- Full Tauri native build currently requires Linux system packages such as `pkg-config` and `libdbus-1-dev`.

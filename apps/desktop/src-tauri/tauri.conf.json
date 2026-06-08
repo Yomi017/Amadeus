@@ -14,13 +14,16 @@
       {
         "label": "main",
         "title": "Amadeus",
-        "width": 960,
-        "height": 640,
-        "resizable": true
+        "width": 1040,
+        "height": 720,
+        "resizable": true,
+        "transparent": true,
+        "decorations": true,
+        "alwaysOnTop": false
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; img-src 'self'; style-src 'self'"
     }
   },
   "bundle": {

@@ -1,8 +1,8 @@
 # Architecture
 
-## Stage 1 Scope
+## Current Stage
 
-Stage 1 establishes a monorepo skeleton for a desktop pet application without implementing the interactive UI, Hermes runtime behavior, Live2D rendering, or TTS pipeline.
+Amadeus is currently at Stage 2: desktop shell. Stage 1 established the monorepo skeleton; Stage 2 adds a local mock desktop pet screen, chat panel, service status display, fallback character preview, and local speech-like UI actions.
 
 ## Runtime Shape
 
@@ -11,11 +11,11 @@ Amadeus is organized as a Tauri v2 desktop app with a React and TypeScript front
 - Tauri owns the desktop shell, native window, future privileged APIs, and app packaging.
 - React owns the webview-rendered interface.
 - TypeScript packages define boundaries for domain logic, Hermes communication, TTS integration, and renderer-facing helpers.
-- Rust code is limited to the minimal Tauri bootstrap in this stage.
+- Rust code exposes only local mock Tauri commands in this stage.
 
 ## Package Boundaries
 
-`@amadeus/core` contains shared types and constants that do not depend on desktop APIs.
+`@amadeus/core` contains shared types and constants that do not depend on desktop APIs, including service status, chat message, and character state contracts.
 
 `@amadeus/hermes-adapter` is reserved for future Hermes connection, state synchronization, and protocol translation. Stage 1 only defines a placeholder export.
 
@@ -23,7 +23,7 @@ Amadeus is organized as a Tauri v2 desktop app with a React and TypeScript front
 
 `@amadeus/renderer-static` is reserved for static renderer helpers and package-owned renderer metadata. It must not contain proprietary model, character, voice, CG, or extracted game assets.
 
-`@amadeus/desktop` composes the packages into a Tauri application shell. The current React screen is only a scaffold marker.
+`@amadeus/desktop` composes the packages into a Tauri application shell. The current React screen provides the Stage 2 rights-clean mock UI and does not call real Hermes, TTS, Live2D, or network services.
 
 ## Security and Asset Hygiene
 
@@ -38,7 +38,19 @@ Do not commit:
 - Hermes private runtime state
 - API keys, cookies, tokens, credentials, or private account data
 
-## Stage 2 Boundary
+## Stage Boundaries
 
-Future UI work should be proposed and approved separately. Stage 2 should not be inferred from the existence of the desktop shell files in this scaffold.
+Stage 2 is limited to local UI behavior:
 
+- mock chat messages
+- local replay and stop-speech state
+- fallback CSS character preview
+- static service status badges
+- mock Tauri commands with no file, network, or private service access
+
+Stages 3-6 remain deferred:
+
+- real or configurable Hermes adapter behavior
+- GPT-SoVITS local service
+- private static character asset loading
+- integrated chat -> TTS -> audio playback -> speaking state flow
