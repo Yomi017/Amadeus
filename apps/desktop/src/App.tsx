@@ -3,6 +3,7 @@ import { AMADEUS_STAGE, STAGE_6_SERVICE_STATUSES, type ChatMessage } from "@amad
 import { FALLBACK_ASSET_DESCRIPTOR } from "@amadeus/renderer-static";
 import { initialChatShellState, reduceChatShellState } from "./chat-shell";
 import { getPrivateCharacterImage } from "./private-character";
+import { dragCurrentWindow } from "./window-drag";
 
 export function App() {
   const [state, dispatch] = useReducer(reduceChatShellState, initialChatShellState);
@@ -19,7 +20,7 @@ export function App() {
   return (
     <main className="amadeus-shell">
       <section className="pet-stage" aria-label="Desktop pet preview">
-        <div className="stage-toolbar">
+        <div className="stage-toolbar" onPointerDown={dragCurrentWindow}>
           <div>
             <p className="eyebrow">Amadeus</p>
             <h1>Local desk companion</h1>
@@ -33,6 +34,7 @@ export function App() {
           className={`character-frame emotion-${state.character.emotion} ${
             privateCharacter.enabled ? "has-private-character" : "uses-fallback-character"
           } ${state.rendererClassName}`}
+          onPointerDown={dragCurrentWindow}
         >
           {privateCharacter.enabled ? (
             <img

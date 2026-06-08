@@ -28,13 +28,13 @@ Dependencies are installed with npm workspaces and pinned by `package-lock.json`
 
 ## Local Private Character Image
 
-For local private prototyping, copy `.env.example` to `.env.local` and set:
+For local private prototyping, copy `.env.example` to `apps/desktop/.env.local` and set:
 
 ```sh
 VITE_AMADEUS_PRIVATE_CHARACTER_IMAGE=/path/to/private/character.png
 ```
 
-`.env.local` is ignored by Git. Do not commit proprietary character art or extracted game assets.
+`apps/desktop/.env.local` is ignored by Git. Do not commit proprietary character art or extracted game assets.
 
 ## Hygiene
 
