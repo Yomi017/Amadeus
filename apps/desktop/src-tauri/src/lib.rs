@@ -40,7 +40,38 @@ fn apply_pet_window_mode<R: Runtime>(window: &WebviewWindow<R>) {
     let _ = window.set_always_on_top(true);
     let _ = window.set_skip_taskbar(true);
     let _ = window.set_visible_on_all_workspaces(true);
+    apply_native_pet_window_mode(window);
 }
+
+#[cfg(windows)]
+fn apply_native_pet_window_mode<R: Runtime>(window: &WebviewWindow<R>) {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GetWindowLongPtrW, SetWindowLongPtrW, SetWindowPos, GWL_EXSTYLE, HWND_TOPMOST,
+        SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE, WS_EX_APPWINDOW, WS_EX_TOOLWINDOW,
+    };
+
+    if let Ok(hwnd) = window.hwnd() {
+        unsafe {
+            let mut ex_style = GetWindowLongPtrW(hwnd.0, GWL_EXSTYLE) as u32;
+            ex_style &= !WS_EX_APPWINDOW;
+            ex_style |= WS_EX_TOOLWINDOW;
+
+            let _ = SetWindowLongPtrW(hwnd.0, GWL_EXSTYLE, ex_style as isize);
+            let _ = SetWindowPos(
+                hwnd.0,
+                HWND_TOPMOST,
+                0,
+                0,
+                0,
+                0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_FRAMECHANGED,
+            );
+        }
+    }
+}
+
+#[cfg(not(windows))]
+fn apply_native_pet_window_mode<R: Runtime>(_window: &WebviewWindow<R>) {}
 
 fn show_pet_window<R: Runtime>(app: &AppHandle<R>) {
     if let Some(window) = app.get_webview_window("main") {
