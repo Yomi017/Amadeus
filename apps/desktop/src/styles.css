@@ -53,6 +53,7 @@ button:hover {
   position: relative;
   display: grid;
   min-height: calc(100vh - 70px);
+  padding-bottom: 76px;
   place-items: end center;
 }
 
@@ -60,7 +61,7 @@ button:hover {
   position: relative;
   display: grid;
   width: 100%;
-  min-height: calc(100vh - 84px);
+  min-height: calc(100vh - 160px);
   place-items: end center;
   overflow: visible;
 }
@@ -73,8 +74,11 @@ button:hover {
 }
 
 .private-character {
-  width: min(96vw, 540px);
-  max-height: calc(100vh - 86px);
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: min(96vw, 540px);
+  max-height: calc(100vh - 160px);
   object-fit: contain;
   object-position: center bottom;
   user-select: none;

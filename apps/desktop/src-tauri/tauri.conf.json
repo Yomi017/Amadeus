@@ -27,7 +27,14 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self'; style-src 'self'"
+      "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost; style-src 'self'",
+      "assetProtocol": {
+        "enable": true,
+        "scope": [
+          "$HOME/data/service/tool/**",
+          "$HOME/data/service/agent/Amadeus-private/**"
+        ]
+      }
     }
   },
   "bundle": {
