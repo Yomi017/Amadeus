@@ -20,6 +20,13 @@ export function getPrivateCharacterImage(): PrivateCharacterImage {
     };
   }
 
+  if (/^[A-Za-z]:[\\/]/.test(imagePath) || imagePath.startsWith("\\\\")) {
+    return {
+      src: `/@fs/${imagePath.replace(/\\/g, "/")}`,
+      enabled: true
+    };
+  }
+
   if (imagePath.startsWith("/")) {
     return {
       src: `/@fs${imagePath}`,

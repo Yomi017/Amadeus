@@ -1,6 +1,7 @@
 use serde::Serialize;
 use tauri::{
-    menu::MenuBuilder, tray::TrayIconBuilder, AppHandle, Manager, Runtime, WebviewWindow,
+    include_image, menu::MenuBuilder, tray::TrayIconBuilder, AppHandle, Manager, Runtime,
+    WebviewWindow, WindowEvent,
 };
 
 #[derive(Serialize)]
@@ -67,6 +68,7 @@ pub fn run() {
                     .build(app)?;
             } else {
                 TrayIconBuilder::with_id("amadeus")
+                    .icon(include_image!("icons/icon.png").clone())
                     .menu(&menu)
                     .show_menu_on_left_click(true)
                     .tooltip("Amadeus")
@@ -75,6 +77,13 @@ pub fn run() {
 
             if let Some(window) = app.get_webview_window("main") {
                 apply_pet_window_mode(&window);
+                let close_window = window.clone();
+                window.on_window_event(move |event| {
+                    if let WindowEvent::CloseRequested { api, .. } = event {
+                        api.prevent_close();
+                        let _ = close_window.hide();
+                    }
+                });
             }
 
             Ok(())
