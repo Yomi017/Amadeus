@@ -38,6 +38,7 @@ fn set_pet_window_mode(mode: String) -> String {
 
 fn apply_pet_window_mode<R: Runtime>(window: &WebviewWindow<R>) {
     let _ = window.set_background_color(Some(Color(0, 0, 0, 0)));
+    let _ = window.set_shadow(false);
     let _ = window.set_always_on_top(true);
     let _ = window.set_skip_taskbar(true);
     let _ = window.set_visible_on_all_workspaces(true);
