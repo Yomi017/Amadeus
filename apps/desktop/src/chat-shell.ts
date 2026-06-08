@@ -17,9 +17,9 @@ export type ChatShellAction =
   | { readonly type: "stop-speech" };
 
 const initialMessage: ChatMessage = {
-  id: "system-stage-3",
+  id: "system-stage-4",
   role: "system",
-  text: "Amadeus v0 shell is running with the local Hermes mock adapter.",
+  text: "Amadeus v0 shell is running with local Hermes and GPT-SoVITS mock providers.",
   status: "complete",
   createdAt: "2026-06-08T00:00:00.000Z"
 };

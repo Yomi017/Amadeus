@@ -1,4 +1,8 @@
-export type AmadeusStage = "stage-1-scaffold" | "stage-2-desktop-shell" | "stage-3-core-hermes-adapter";
+export type AmadeusStage =
+  | "stage-1-scaffold"
+  | "stage-2-desktop-shell"
+  | "stage-3-core-hermes-adapter"
+  | "stage-4-gpt-sovits-tts-provider";
 
 export type ServiceState = "available" | "mock" | "offline" | "degraded" | "blocked";
 
@@ -93,7 +97,50 @@ export interface HermesAdapter {
   request(request: HermesChatRequest): Promise<SafeAdapterResult<AssistantReply>>;
 }
 
-export const AMADEUS_STAGE: AmadeusStage = "stage-3-core-hermes-adapter";
+export type TtsProviderMode = "mock" | "http";
+export type TtsAudioFormat = "wav";
+export type TtsResultSource = "mock" | "gpt-sovits";
+
+export interface TtsSynthesisRequest {
+  readonly id: string;
+  readonly text: string;
+  readonly locale?: string;
+  readonly voice?: string;
+  readonly emotion?: CharacterEmotion;
+  readonly speed?: number;
+  readonly topP?: number;
+  readonly temperature?: number;
+  readonly createdAt?: string;
+  readonly metadata?: Readonly<Record<string, string | number | boolean>>;
+}
+
+export interface TtsSynthesisResult {
+  readonly id: string;
+  readonly requestId: string;
+  readonly source: TtsResultSource;
+  readonly audioUrl: string;
+  readonly format: TtsAudioFormat;
+  readonly mimeType: "audio/wav";
+  readonly createdAt: string;
+  readonly durationMs?: number;
+  readonly cached?: boolean;
+}
+
+export interface TtsProviderConfig {
+  readonly mode?: TtsProviderMode;
+  readonly endpoint?: string;
+  readonly label?: string;
+  readonly timeoutMs?: number;
+}
+
+export interface TtsProvider {
+  readonly mode: TtsProviderMode;
+  readonly config: TtsProviderConfig;
+  status(): Promise<ServiceStatus>;
+  synthesize(request: TtsSynthesisRequest): Promise<SafeAdapterResult<TtsSynthesisResult>>;
+}
+
+export const AMADEUS_STAGE: AmadeusStage = "stage-4-gpt-sovits-tts-provider";
 
 export const STAGE_2_SERVICE_STATUSES: readonly ServiceStatus[] = [
   {
@@ -134,6 +181,33 @@ export const STAGE_3_SERVICE_STATUSES: readonly ServiceStatus[] = [
     label: "TTS",
     state: "mock",
     detail: "No audio synthesis yet"
+  },
+  {
+    id: "renderer",
+    label: "Renderer",
+    state: "mock",
+    detail: "Static fallback renderer"
+  },
+  {
+    id: "assets",
+    label: "Assets",
+    state: "blocked",
+    detail: "Private character assets excluded"
+  }
+];
+
+export const STAGE_4_SERVICE_STATUSES: readonly ServiceStatus[] = [
+  {
+    id: "hermes",
+    label: "Hermes",
+    state: "mock",
+    detail: "Core adapter mock ready"
+  },
+  {
+    id: "tts",
+    label: "TTS",
+    state: "mock",
+    detail: "GPT-SoVITS HTTP provider boundary ready"
   },
   {
     id: "renderer",

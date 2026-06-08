@@ -2,14 +2,14 @@
 
 Amadeus is a Tauri v2, React, and TypeScript monorepo for a Hermes-based desktop pet.
 
-This repository is currently at Stage 3: core contracts and Hermes adapter boundary. The app has a rights-clean local mock desktop pet screen, service status strip, chat panel, local replay/stop-speech state, and a provider-shaped Hermes adapter. Real Hermes chat, GPT-SoVITS synthesis, Live2D rendering, private character assets, and generated audio are still deferred.
+This repository is currently at Stage 4: GPT-SoVITS TTS provider boundary. The app has a rights-clean local mock desktop pet screen, service status strip, chat panel, local replay/stop-speech state, a provider-shaped Hermes adapter, and a GPT-SoVITS HTTP TTS boundary. Real Hermes chat, Live2D rendering, private character assets, generated audio commits, and full chat-to-audio playback integration are still deferred.
 
 ## Workspace Layout
 
 - `apps/desktop` - Tauri v2 desktop application shell with React UI, mock chat, and fallback character preview.
 - `packages/core` - Shared domain primitives, service status, chat message, character state, and Hermes adapter contract types.
 - `packages/hermes-adapter` - Mock/real Hermes adapter boundary with injected transport support and output sanitization.
-- `packages/tts-gpt-sovits` - Placeholder boundary for future GPT-SoVITS TTS integration.
+- `packages/tts-gpt-sovits` - GPT-SoVITS HTTP TTS provider/client boundary.
 - `packages/renderer-static` - Placeholder boundary for static renderer assets and helpers.
 - `docs` - Architecture notes, references, and collaboration workflow.
 
@@ -33,6 +33,6 @@ The repository intentionally ignores proprietary assets, extracted game material
 ## Current Limits
 
 - Hermes real mode requires an injected transport and does not auto-discover private Hermes files.
-- TTS is mock-only and does not generate or play audio.
+- TTS real mode requires an explicitly configured local HTTP endpoint and does not read model files from the frontend package.
 - Character rendering uses a CSS fallback silhouette, not private character assets.
 - Full Tauri native build currently requires Linux system packages such as `pkg-config` and `libdbus-1-dev`.

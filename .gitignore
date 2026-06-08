@@ -9,6 +9,8 @@ build/
 coverage/
 *.tsbuildinfo
 apps/desktop/src-tauri/target/
+__pycache__/
+*.pyc
 
 # Environment and secrets
 .env
