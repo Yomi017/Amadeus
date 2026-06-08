@@ -1,5 +1,7 @@
 use serde::Serialize;
-use tauri::Manager;
+use tauri::{
+    menu::MenuBuilder, tray::TrayIconBuilder, AppHandle, Manager, Runtime, WebviewWindow,
+};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -33,17 +35,54 @@ fn set_pet_window_mode(mode: String) -> String {
     }
 }
 
+fn apply_pet_window_mode<R: Runtime>(window: &WebviewWindow<R>) {
+    let _ = window.set_always_on_top(true);
+    let _ = window.set_skip_taskbar(true);
+    let _ = window.set_visible_on_all_workspaces(true);
+}
+
+fn show_pet_window<R: Runtime>(app: &AppHandle<R>) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        apply_pet_window_mode(&window);
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
+            let menu = MenuBuilder::new(app)
+                .text("show", "Show")
+                .separator()
+                .text("quit", "Quit")
+                .build()?;
+
+            if let Some(icon) = app.default_window_icon() {
+                TrayIconBuilder::with_id("amadeus")
+                    .icon(icon.clone())
+                    .menu(&menu)
+                    .show_menu_on_left_click(true)
+                    .tooltip("Amadeus")
+                    .build(app)?;
+            } else {
+                TrayIconBuilder::with_id("amadeus")
+                    .menu(&menu)
+                    .show_menu_on_left_click(true)
+                    .tooltip("Amadeus")
+                    .build(app)?;
+            }
+
             if let Some(window) = app.get_webview_window("main") {
-                let _ = window.set_always_on_top(true);
-                let _ = window.set_skip_taskbar(true);
-                let _ = window.set_visible_on_all_workspaces(true);
+                apply_pet_window_mode(&window);
             }
 
             Ok(())
+        })
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            "show" => show_pet_window(app),
+            "quit" => app.exit(0),
+            _ => {}
         })
         .invoke_handler(tauri::generate_handler![
             get_app_status,
