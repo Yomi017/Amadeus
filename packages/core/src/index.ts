@@ -18,7 +18,7 @@ export interface ServiceStatus {
 
 export type ChatRole = "user" | "assistant" | "system";
 export type ChatMessageStatus = "pending" | "complete" | "cancelled";
-export type SpeechJobState = "idle" | "queued" | "mock-speaking" | "stopped" | "complete";
+export type SpeechJobState = "idle" | "queued" | "mock-speaking" | "speaking" | "stopped" | "complete" | "failed";
 
 export interface SpeechJob {
   readonly id: string;
@@ -31,6 +31,7 @@ export interface ChatMessage {
   readonly id: string;
   readonly role: ChatRole;
   readonly text: string;
+  readonly speechTextJa?: string;
   readonly status: ChatMessageStatus;
   readonly createdAt: string;
   readonly speechState?: SpeechJobState;
@@ -53,6 +54,8 @@ export interface AssistantReply {
   readonly id: string;
   readonly role: "assistant";
   readonly text: string;
+  readonly speechTextJa?: string;
+  readonly emotion?: CharacterEmotion;
   readonly createdAt: string;
   readonly source: AssistantReplySource;
 }

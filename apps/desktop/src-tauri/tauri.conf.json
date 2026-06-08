@@ -29,7 +29,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost; style-src 'self'",
+      "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost; style-src 'self'; connect-src 'self' http://127.0.0.1:* http://localhost:*; media-src 'self' http://127.0.0.1:* http://localhost:*",
       "assetProtocol": {
         "enable": true,
         "scope": [

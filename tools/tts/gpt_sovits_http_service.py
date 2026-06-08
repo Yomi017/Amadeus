@@ -20,7 +20,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import quote, unquote, urlparse
 
 
 DEFAULT_HOST = "127.0.0.1"
@@ -28,6 +28,7 @@ DEFAULT_PORT = 48162
 DEFAULT_VERSION = "v2ProPlus"
 DEFAULT_MAX_TEXT_LENGTH = 500
 DEFAULT_OUTPUT_DIR = str(Path(tempfile.gettempdir()) / "amadeus-tts-cache")
+SAFE_REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9_](?:[A-Za-z0-9_.-]{0,78}[A-Za-z0-9_])?$")
 
 
 class ServiceConfig:
@@ -104,7 +105,8 @@ class TtsRuntime:
             raise ClientError(f"text exceeds max length {self.config.max_text_length}")
 
         request_id = safe_request_id(str(payload.get("id", "")).strip() or digest_text(text))
-        output = self.config.output_dir / f"{request_id}.wav"
+        filename = audio_filename_for_request_id(request_id)
+        output = self.config.output_dir / filename
         output.parent.mkdir(parents=True, exist_ok=True)
 
         started = time.monotonic()
@@ -139,7 +141,7 @@ class TtsRuntime:
         return {
             "id": f"tts-{request_id}",
             "requestId": request_id,
-            "audioUrl": output.as_uri(),
+            "audioUrl": audio_url(self.config.port, filename),
             "format": "wav",
             "mimeType": "audio/wav",
             "createdAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -202,7 +204,44 @@ def digest_text(text: str) -> str:
 
 def safe_request_id(value: str) -> str:
     normalized = re.sub(r"[^A-Za-z0-9_.-]+", "-", value).strip(".-")
-    return normalized[:80] or digest_text(value)
+    candidate = normalized[:80].strip(".-")
+    if SAFE_REQUEST_ID_PATTERN.fullmatch(candidate):
+        return candidate
+    return digest_text(value)
+
+
+def audio_filename_for_request_id(request_id: str) -> str:
+    if not SAFE_REQUEST_ID_PATTERN.fullmatch(request_id):
+        raise ClientError("invalid audio filename")
+    return f"{request_id}.wav"
+
+
+def audio_url(port: int, filename: str) -> str:
+    return f"http://127.0.0.1:{port}/audio/{quote(filename, safe='')}"
+
+
+def safe_audio_path(output_dir: Path, filename: str) -> Path:
+    if not filename.endswith(".wav"):
+        raise ClientError("invalid audio filename")
+
+    request_id = filename[:-4]
+    if not SAFE_REQUEST_ID_PATTERN.fullmatch(request_id):
+        raise ClientError("invalid audio filename")
+
+    output_root = output_dir.resolve()
+    output_path = (output_root / filename).resolve()
+    if output_path.parent != output_root:
+        raise ClientError("invalid audio filename")
+    return output_path
+
+
+def ensure_output_dir_outside_repo(output_dir: Path) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    try:
+        output_dir.resolve().relative_to(repo_root)
+    except ValueError:
+        return
+    raise SystemExit("TTS output cache must be outside the repository")
 
 
 def label_path(path: Path) -> str:
@@ -233,10 +272,13 @@ def make_handler(runtime: TtsRuntime) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:
             route = urlparse(self.path).path
-            if route != "/status":
-                self.send_json(HTTPStatus.NOT_FOUND, {"error": "not found"})
+            if route == "/status":
+                self.send_json(HTTPStatus.OK, runtime.status())
                 return
-            self.send_json(HTTPStatus.OK, runtime.status())
+            if route.startswith("/audio/"):
+                self.send_audio(unquote(route[len("/audio/") :]))
+                return
+            self.send_json(HTTPStatus.NOT_FOUND, {"error": "not found"})
 
         def do_POST(self) -> None:
             route = urlparse(self.path).path
@@ -252,6 +294,35 @@ def make_handler(runtime: TtsRuntime) -> type[BaseHTTPRequestHandler]:
                 self.send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "GPT-SoVITS synthesis failed"})
                 return
             self.send_json(HTTPStatus.OK, result)
+
+        def send_audio(self, filename: str) -> None:
+            try:
+                audio_path = safe_audio_path(runtime.config.output_dir, filename)
+            except ClientError as error:
+                self.send_json(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+                return
+            if not audio_path.is_file():
+                self.send_json(HTTPStatus.NOT_FOUND, {"error": "audio not found"})
+                return
+
+            try:
+                size = audio_path.stat().st_size
+                audio = audio_path.open("rb")
+            except OSError:
+                self.send_json(HTTPStatus.NOT_FOUND, {"error": "audio not found"})
+                return
+
+            with audio:
+                self.send_response(HTTPStatus.OK.value)
+                self.send_header("content-type", "audio/wav")
+                self.send_header("content-length", str(size))
+                self.send_header("cache-control", "no-store")
+                self.end_headers()
+                while True:
+                    chunk = audio.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
 
         def send_json(self, status: HTTPStatus, payload: dict[str, Any]) -> None:
             encoded = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -307,6 +378,7 @@ def main() -> None:
         max_text_length=int(args.max_text_length),
         dry_run=bool(args.dry_run),
     )
+    ensure_output_dir_outside_repo(config.output_dir)
     if not config.dry_run and not config.ref_text:
         raise SystemExit("AMADEUS_TTS_REF_TEXT or --ref-text is required")
 

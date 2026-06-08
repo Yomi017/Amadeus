@@ -2,7 +2,7 @@
 
 Amadeus is a Tauri v2, React, and TypeScript monorepo for a Hermes-based desktop pet.
 
-This repository is currently at Stage 6: v0 integration skeleton. The app has a rights-clean local mock desktop pet screen, service status strip, chat panel, local replay/stop-speech state, a provider-shaped Hermes adapter, a GPT-SoVITS HTTP TTS boundary, a static fallback renderer boundary, an optional local-only private static character image for development, and a mock chat-to-speech-metadata-to-renderer flow. Real Hermes chat, Live2D rendering, generated audio commits, and real audio playback are still deferred.
+This repository is currently at Stage 6: v0 integration skeleton. The app has a rights-clean desktop pet screen, a compact chat input, a Hermes CLI chat bridge, Japanese speech text generation before TTS, a local GPT-SoVITS HTTP TTS bridge, audio playback state, a static fallback renderer boundary, and an optional local-only private static character image for development. Live2D model loading is still deferred.
 
 ## Workspace Layout
 
@@ -26,6 +26,17 @@ npm run test
 
 Dependencies are installed with npm workspaces and pinned by `package-lock.json`.
 
+## Local Run
+
+Start the GPT-SoVITS service first, then launch the desktop app:
+
+```sh
+AMADEUS_TTS_DRY_RUN=1 python tools/tts/gpt_sovits_http_service.py
+npm run dev
+```
+
+For real voice, replace dry-run with the private model/reference environment variables described in `docs/tts-gpt-sovits.md`. The desktop app calls Hermes through the local `hermes chat` CLI, and on Windows it uses `wsl.exe` to reach the WSL Hermes install.
+
 ## Local Private Character Image
 
 For local private prototyping, copy `.env.example` to `apps/desktop/.env.local` and set:
@@ -42,7 +53,7 @@ The repository intentionally ignores proprietary assets, extracted game material
 
 ## Current Limits
 
-- Hermes real mode requires an injected transport and does not auto-discover private Hermes files.
+- Hermes real mode shells out to local Hermes/WSL Hermes and does not read or print private Hermes files.
 - TTS real mode requires an explicitly configured local HTTP endpoint and does not read model files from the frontend package.
 - Character rendering can display one local private static image during development, but Live2D model loading is still deferred.
 - Full Tauri native build currently requires Linux system packages from the Tauri Linux prerequisites.

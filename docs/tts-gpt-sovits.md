@@ -27,6 +27,7 @@ The service exposes:
 
 - `GET /status`
 - `POST /synthesize`
+- `GET /audio/<generated-file>.wav`
 
 Example request:
 
@@ -35,6 +36,16 @@ curl -s http://127.0.0.1:48162/synthesize \
   -H 'content-type: application/json' \
   -d '{"id":"local-test","text":"おはよう。"}'
 ```
+
+`POST /synthesize` returns an HTTP `audioUrl` such as:
+
+```json
+{
+  "audioUrl": "http://127.0.0.1:48162/audio/local-test.wav"
+}
+```
+
+The desktop app plays that URL directly. Generated audio remains in the runtime cache outside the repository.
 
 ## Repository Hygiene
 

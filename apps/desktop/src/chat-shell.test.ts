@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { buildMockAssistantReply, buildMockSpeechJob, initialChatShellState, reduceChatShellState } from "./chat-shell";
+import {
+  buildMockAssistantReply,
+  buildMockSpeechJob,
+  buildSpeechJob,
+  initialChatShellState,
+  reduceChatShellState
+} from "./chat-shell";
 
 describe("chat shell reducer", () => {
   it("creates user and mock assistant messages without external services", () => {
@@ -118,5 +124,69 @@ describe("chat shell reducer", () => {
     });
 
     expect(next).toBe(initialChatShellState);
+  });
+
+  it("tracks real Hermes and TTS audio lifecycle", () => {
+    const submitted = reduceChatShellState(initialChatShellState, {
+      type: "submit-user",
+      text: "こんにちは",
+      userId: "user-real",
+      assistantId: "assistant-real",
+      now: "2026-06-08T00:00:00.000Z"
+    });
+
+    expect(submitted.busy).toBe(true);
+    expect(submitted.messages.at(-1)).toMatchObject({
+      id: "assistant-real",
+      status: "pending"
+    });
+
+    const replied = reduceChatShellState(submitted, {
+      type: "assistant-received",
+      messageId: "assistant-real",
+      reply: {
+        id: "hermes-real",
+        role: "assistant",
+        text: "可以。",
+        speechTextJa: "はい。",
+        emotion: "soft",
+        createdAt: "2026-06-08T00:00:01.000Z",
+        source: "hermes"
+      }
+    });
+    const speechJob = buildSpeechJob("assistant-real", "はい。", {
+      id: "tts-real",
+      requestId: "assistant-real-speech",
+      source: "gpt-sovits",
+      audioUrl: "http://127.0.0.1:48162/audio/assistant-real-speech.wav",
+      format: "wav",
+      mimeType: "audio/wav",
+      createdAt: "2026-06-08T00:00:02.000Z"
+    });
+    const queued = reduceChatShellState(replied, {
+      type: "speech-queued",
+      messageId: "assistant-real",
+      speechJob
+    });
+    const speaking = reduceChatShellState(queued, {
+      type: "speech-started",
+      messageId: "assistant-real"
+    });
+    const completed = reduceChatShellState(speaking, {
+      type: "speech-complete",
+      messageId: "assistant-real"
+    });
+
+    expect(replied.busy).toBe(false);
+    expect(replied.messages.at(-1)).toMatchObject({
+      text: "可以。",
+      speechTextJa: "はい。",
+      status: "complete"
+    });
+    expect(queued.messages.at(-1)?.speechState).toBe("queued");
+    expect(speaking.character.speaking).toBe(true);
+    expect(speaking.messages.at(-1)?.speechState).toBe("speaking");
+    expect(completed.character.speaking).toBe(false);
+    expect(completed.messages.at(-1)?.speechState).toBe("complete");
   });
 });

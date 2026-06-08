@@ -1,12 +1,14 @@
-import { useEffect, useReducer } from "react";
-import type { ChatMessage } from "@amadeus/core";
-import { initialChatShellState, reduceChatShellState } from "./chat-shell";
+import { useEffect, useRef, useReducer } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import type { AssistantReply, ChatMessage, TtsSynthesisResult } from "@amadeus/core";
+import { buildSpeechJob, initialChatShellState, reduceChatShellState } from "./chat-shell";
 import { ensurePetWindowMode } from "./pet-window-mode";
 import { getPrivateCharacterImage } from "./private-character";
 import { dragCurrentWindow } from "./window-drag";
 
 export function App() {
   const [state, dispatch] = useReducer(reduceChatShellState, initialChatShellState);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const privateCharacter = getPrivateCharacterImage();
   const latestAssistantMessage = [...state.messages].reverse().find((message) => message.role === "assistant");
 
@@ -14,11 +16,105 @@ export function App() {
     ensurePetWindowMode();
   }, []);
 
-  function sendMessage() {
+  useEffect(() => {
+    return () => {
+      stopAudio(audioRef.current);
+    };
+  }, []);
+
+  async function sendMessage() {
+    const text = state.input.trim();
+    if (!text || state.busy) {
+      return;
+    }
+
+    void unlockAudioPlayback();
+    stopAudio(audioRef.current);
+    audioRef.current = null;
+    const now = new Date().toISOString();
+    const ids = createMessageIds(now);
     dispatch({
-      type: "send",
-      text: state.input,
-      now: new Date().toISOString()
+      type: "submit-user",
+      text,
+      userId: ids.userId,
+      assistantId: ids.assistantId,
+      now
+    });
+
+    let assistantReceived = false;
+    try {
+      const reply = await invoke<AssistantReplyDto>("send_chat_message", {
+        request: {
+          text
+        }
+      });
+      const normalizedReply = toAssistantReply(reply);
+      dispatch({
+        type: "assistant-received",
+        messageId: ids.assistantId,
+        reply: normalizedReply,
+        detail: reply.statusDetail
+      });
+      assistantReceived = true;
+
+      const speechText = normalizedReply.speechTextJa || normalizedReply.text;
+      const ttsResult = await invoke<TtsResultDto>("synthesize_speech", {
+        request: {
+          id: `${ids.assistantId}-speech`,
+          text: speechText,
+          locale: "ja",
+          emotion: normalizedReply.emotion ?? "soft",
+          speed: 1,
+          topP: 1,
+          temperature: 1
+        }
+      });
+      const result = toTtsResult(ttsResult);
+      dispatch({
+        type: "speech-queued",
+        messageId: ids.assistantId,
+        speechJob: buildSpeechJob(ids.assistantId, speechText, result)
+      });
+      playSpeech(result.audioUrl, ids.assistantId);
+    } catch (error) {
+      const message = safeErrorMessage(error);
+      dispatch({
+        type: assistantReceived ? "speech-failed" : "assistant-failed",
+        messageId: ids.assistantId,
+        error: message
+      });
+    }
+  }
+
+  function playSpeech(audioUrl: string, messageId: string) {
+    stopAudio(audioRef.current);
+    const audio = new Audio(audioUrl);
+    audioRef.current = audio;
+    audio.addEventListener("play", () => {
+      dispatch({
+        type: "speech-started",
+        messageId
+      });
+    });
+    audio.addEventListener("ended", () => {
+      dispatch({
+        type: "speech-complete",
+        messageId
+      });
+    });
+    audio.addEventListener("error", () => {
+      dispatch({
+        type: "speech-failed",
+        messageId,
+        error: "Audio playback failed"
+      });
+    });
+    audio.play().catch((error: unknown) => {
+      dispatch({
+        type: "speech-failed",
+        messageId,
+        error: safeErrorMessage(error)
+      });
     });
   }
 
@@ -73,9 +169,12 @@ export function App() {
           aria-label="Message"
           value={state.input}
           onChange={(event) => dispatch({ type: "set-input", value: event.currentTarget.value })}
-          placeholder="Type..."
+          placeholder={state.busy ? "Thinking..." : "Type..."}
+          disabled={state.busy}
         />
-        <button type="submit">Send</button>
+        <button type="submit" disabled={state.busy}>
+          {state.busy ? "Wait" : "Send"}
+        </button>
       </form>
     </main>
   );
@@ -94,7 +193,127 @@ function ReplyBubble({ message }: ReplyBubbleProps) {
       onPointerDown={(event) => event.stopPropagation()}
     >
       <p>{message.text}</p>
-      <span>{message.speechState === "mock-speaking" ? "speaking..." : "ready"}</span>
+      <span>{statusLabel(message)}</span>
     </article>
   );
+}
+
+interface AssistantReplyDto {
+  readonly id: string;
+  readonly role: "assistant";
+  readonly text: string;
+  readonly speechTextJa?: string;
+  readonly emotion?: AssistantReply["emotion"];
+  readonly createdAt: string;
+  readonly source: AssistantReply["source"];
+  readonly statusDetail: string;
+}
+
+interface TtsResultDto {
+  readonly id: string;
+  readonly requestId: string;
+  readonly source: TtsSynthesisResult["source"];
+  readonly audioUrl: string;
+  readonly format: TtsSynthesisResult["format"];
+  readonly mimeType: TtsSynthesisResult["mimeType"];
+  readonly createdAt: string;
+  readonly durationMs?: number;
+  readonly cached?: boolean;
+}
+
+function createMessageIds(seed: string): { readonly userId: string; readonly assistantId: string } {
+  const suffix = `${Date.now().toString(36)}-${stableHash(seed).slice(0, 6)}`;
+  return {
+    userId: `user-${suffix}`,
+    assistantId: `assistant-${suffix}`
+  };
+}
+
+function toAssistantReply(reply: AssistantReplyDto): AssistantReply {
+  return {
+    id: reply.id,
+    role: "assistant",
+    text: reply.text,
+    speechTextJa: reply.speechTextJa,
+    emotion: reply.emotion,
+    createdAt: reply.createdAt,
+    source: reply.source
+  };
+}
+
+function toTtsResult(result: TtsResultDto): TtsSynthesisResult {
+  return {
+    id: result.id,
+    requestId: result.requestId,
+    source: result.source,
+    audioUrl: result.audioUrl,
+    format: result.format,
+    mimeType: result.mimeType,
+    createdAt: result.createdAt,
+    durationMs: result.durationMs,
+    cached: result.cached
+  };
+}
+
+function stopAudio(audio: HTMLAudioElement | null) {
+  if (!audio) {
+    return;
+  }
+  audio.pause();
+  audio.currentTime = 0;
+}
+
+let audioUnlocked = false;
+
+async function unlockAudioPlayback(): Promise<void> {
+  if (audioUnlocked) {
+    return;
+  }
+
+  const audio = new Audio(
+    "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA="
+  );
+  audio.volume = 0;
+  try {
+    await audio.play();
+    audio.pause();
+    audioUnlocked = true;
+  } catch {
+    audioUnlocked = false;
+  }
+}
+
+function statusLabel(message: ChatMessage): string {
+  if (message.status === "pending") {
+    return "thinking";
+  }
+  if (message.speechState === "queued") {
+    return "voice queued";
+  }
+  if (message.speechState === "speaking" || message.speechState === "mock-speaking") {
+    return "speaking";
+  }
+  if (message.speechState === "failed") {
+    return "voice failed";
+  }
+  return "ready";
+}
+
+function safeErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === "string") {
+    return error;
+  }
+  return "Amadeus request failed";
+}
+
+function stableHash(input: string): string {
+  let hash = 0x811c9dc5;
+  for (const char of input) {
+    hash ^= char.charCodeAt(0);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
 }
