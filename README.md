@@ -2,13 +2,13 @@
 
 Amadeus is a Tauri v2, React, and TypeScript monorepo for a Hermes-based desktop pet.
 
-This repository is currently at Stage 2: desktop shell. The app has a rights-clean local mock desktop pet screen, service status strip, chat panel, and local replay/stop-speech state. Real Hermes chat, GPT-SoVITS synthesis, Live2D rendering, private character assets, and generated audio are still deferred.
+This repository is currently at Stage 3: core contracts and Hermes adapter boundary. The app has a rights-clean local mock desktop pet screen, service status strip, chat panel, local replay/stop-speech state, and a provider-shaped Hermes adapter. Real Hermes chat, GPT-SoVITS synthesis, Live2D rendering, private character assets, and generated audio are still deferred.
 
 ## Workspace Layout
 
 - `apps/desktop` - Tauri v2 desktop application shell with React UI, mock chat, and fallback character preview.
-- `packages/core` - Shared domain primitives, service status, chat message, and character state types.
-- `packages/hermes-adapter` - Placeholder boundary for future Hermes integration.
+- `packages/core` - Shared domain primitives, service status, chat message, character state, and Hermes adapter contract types.
+- `packages/hermes-adapter` - Mock/real Hermes adapter boundary with injected transport support and output sanitization.
 - `packages/tts-gpt-sovits` - Placeholder boundary for future GPT-SoVITS TTS integration.
 - `packages/renderer-static` - Placeholder boundary for static renderer assets and helpers.
 - `docs` - Architecture notes, references, and collaboration workflow.
@@ -32,7 +32,7 @@ The repository intentionally ignores proprietary assets, extracted game material
 
 ## Current Limits
 
-- Hermes is mock-only.
+- Hermes real mode requires an injected transport and does not auto-discover private Hermes files.
 - TTS is mock-only and does not generate or play audio.
 - Character rendering uses a CSS fallback silhouette, not private character assets.
 - Full Tauri native build currently requires Linux system packages such as `pkg-config` and `libdbus-1-dev`.

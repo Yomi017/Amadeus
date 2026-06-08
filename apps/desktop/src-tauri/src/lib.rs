@@ -12,7 +12,7 @@ struct AppStatus {
 #[tauri::command]
 fn get_app_status() -> AppStatus {
     AppStatus {
-        stage: "stage-2-desktop-shell",
+        stage: "stage-3-core-hermes-adapter",
         hermes_mode: "mock",
         tts_mode: "mock",
         renderer_mode: "static-fallback",

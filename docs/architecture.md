@@ -2,7 +2,7 @@
 
 ## Current Stage
 
-Amadeus is currently at Stage 2: desktop shell. Stage 1 established the monorepo skeleton; Stage 2 adds a local mock desktop pet screen, chat panel, service status display, fallback character preview, and local speech-like UI actions.
+Amadeus is currently at Stage 3: core contracts and Hermes adapter boundary. Stage 1 established the monorepo skeleton; Stage 2 added a local mock desktop pet screen, chat panel, service status display, fallback character preview, and local speech-like UI actions. Stage 3 adds provider-shaped Hermes contracts and a safe mock/real adapter boundary.
 
 ## Runtime Shape
 
@@ -15,15 +15,15 @@ Amadeus is organized as a Tauri v2 desktop app with a React and TypeScript front
 
 ## Package Boundaries
 
-`@amadeus/core` contains shared types and constants that do not depend on desktop APIs, including service status, chat message, and character state contracts.
+`@amadeus/core` contains shared types and constants that do not depend on desktop APIs, including service status, chat message, character state, assistant reply, Hermes request, safe result, and adapter contracts.
 
-`@amadeus/hermes-adapter` is reserved for future Hermes connection, state synchronization, and protocol translation. Stage 1 only defines a placeholder export.
+`@amadeus/hermes-adapter` implements the Stage 3 Hermes boundary. Mock mode is deterministic and local. Real mode requires an injected transport; it does not read Hermes private files, environment secrets, local credentials, or runtime state by itself.
 
 `@amadeus/tts-gpt-sovits` is reserved for future GPT-SoVITS client and speech pipeline code. Stage 1 only defines a placeholder export.
 
 `@amadeus/renderer-static` is reserved for static renderer helpers and package-owned renderer metadata. It must not contain proprietary model, character, voice, CG, or extracted game assets.
 
-`@amadeus/desktop` composes the packages into a Tauri application shell. The current React screen provides the Stage 2 rights-clean mock UI and does not call real Hermes, TTS, Live2D, or network services.
+`@amadeus/desktop` composes the packages into a Tauri application shell. The current React screen provides the rights-clean mock UI, uses the Hermes adapter mock reply helper, and does not call real Hermes, TTS, Live2D, or network services.
 
 ## Security and Asset Hygiene
 
@@ -48,9 +48,17 @@ Stage 2 is limited to local UI behavior:
 - static service status badges
 - mock Tauri commands with no file, network, or private service access
 
-Stages 3-6 remain deferred:
+Stage 3 is limited to:
 
-- real or configurable Hermes adapter behavior
+- shared Hermes request/reply contracts
+- safe degraded result and error types
+- mock Hermes status and replies
+- injected real transport boundary
+- output sanitization for private paths and secret-like values
+- desktop mock helper usage with no real Hermes calls
+
+Stages 4-6 remain deferred:
+
 - GPT-SoVITS local service
 - private static character asset loading
 - integrated chat -> TTS -> audio playback -> speaking state flow

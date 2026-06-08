@@ -1,5 +1,5 @@
 import { useReducer } from "react";
-import { AMADEUS_STAGE, STAGE_2_SERVICE_STATUSES, type ChatMessage } from "@amadeus/core";
+import { AMADEUS_STAGE, STAGE_3_SERVICE_STATUSES, type ChatMessage } from "@amadeus/core";
 import { initialChatShellState, reduceChatShellState } from "./chat-shell";
 
 export function App() {
@@ -42,7 +42,7 @@ export function App() {
         </div>
 
         <div className="status-strip">
-          {STAGE_2_SERVICE_STATUSES.map((service) => (
+          {STAGE_3_SERVICE_STATUSES.map((service) => (
             <div className={`status-pill state-${service.state}`} key={service.id}>
               <span>{service.label}</span>
               <strong>{service.detail}</strong>

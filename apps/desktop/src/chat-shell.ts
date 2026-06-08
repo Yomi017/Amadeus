@@ -1,4 +1,5 @@
 import type { CharacterState, ChatMessage } from "@amadeus/core";
+import { buildMockAssistantReply as buildHermesMockAssistantReply } from "@amadeus/hermes-adapter";
 
 export interface ChatShellState {
   readonly messages: readonly ChatMessage[];
@@ -16,9 +17,9 @@ export type ChatShellAction =
   | { readonly type: "stop-speech" };
 
 const initialMessage: ChatMessage = {
-  id: "system-stage-2",
+  id: "system-stage-3",
   role: "system",
-  text: "Amadeus v0 shell is running in local mock mode.",
+  text: "Amadeus v0 shell is running with the local Hermes mock adapter.",
   status: "complete",
   createdAt: "2026-06-08T00:00:00.000Z"
 };
@@ -36,11 +37,15 @@ export const initialChatShellState: ChatShellState = {
 };
 
 export function buildMockAssistantReply(text: string): string {
-  const trimmed = text.trim();
-  if (!trimmed) {
-    return "ここにいる。用件を聞かせて。";
-  }
-  return `聞こえている。「${trimmed}」のことだな。今はまだ mock mode だが、そばにいる。`;
+  return buildHermesMockAssistantReply({
+    id: "desktop-mock-chat",
+    messages: [
+      {
+        role: "user",
+        text
+      }
+    ]
+  }).text;
 }
 
 export function reduceChatShellState(state: ChatShellState, action: ChatShellAction): ChatShellState {
