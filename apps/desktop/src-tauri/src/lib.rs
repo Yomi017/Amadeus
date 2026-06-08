@@ -11,6 +11,7 @@ use tauri::{
 };
 
 const HERMES_SOURCE: &str = "amadeus-desktop-pet";
+const DEFAULT_WSL_HERMES_PATH: &str = "/home/shinku/.local/bin/hermes";
 const HERMES_TIMEOUT: Duration = Duration::from_secs(90);
 const MAX_USER_TEXT_LENGTH: usize = 2_000;
 const MAX_HERMES_REPLY_LENGTH: usize = 4_000;
@@ -222,27 +223,39 @@ User message:
 }
 
 fn run_hermes_chat(prompt: &str) -> Result<String, String> {
-    let script = format!(
-        "export PATH=\"$HOME/.local/bin:$PATH\"\nprompt=\"$(cat)\"\nexec hermes chat -q \"$prompt\" -Q --source {} --max-turns 6",
-        HERMES_SOURCE
-    );
     let mut command = if cfg!(windows) {
         let mut command = Command::new("wsl.exe");
-        command.args(["bash", "-lc", &script]);
+        let hermes_path = std::env::var("AMADEUS_WSL_HERMES_PATH").unwrap_or_else(|_| DEFAULT_WSL_HERMES_PATH.to_string());
+        command.args([
+            "--exec",
+            hermes_path.as_str(),
+            "chat",
+            "-q",
+            prompt,
+            "-Q",
+            "--source",
+            HERMES_SOURCE,
+            "--max-turns",
+            "6",
+        ]);
         command
     } else {
-        let mut command = Command::new("bash");
-        command.args(["-lc", &script]);
+        let mut command = Command::new("hermes");
+        command.args([
+            "chat",
+            "-q",
+            prompt,
+            "-Q",
+            "--source",
+            HERMES_SOURCE,
+            "--max-turns",
+            "6",
+        ]);
         command
     };
 
-    command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    command.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
     let mut child = command.spawn().map_err(|error| format!("Hermes failed to start: {}", error))?;
-    if let Some(mut stdin) = child.stdin.take() {
-        stdin
-            .write_all(prompt.as_bytes())
-            .map_err(|error| format!("Hermes stdin failed: {}", error))?;
-    }
 
     let started = Instant::now();
     loop {
