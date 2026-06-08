@@ -23,7 +23,7 @@ Amadeus is organized as a Tauri v2 desktop app with a React and TypeScript front
 
 `@amadeus/renderer-static` implements the Stage 5 static renderer boundary. It exports rights-clean fallback metadata and renderer state helpers. Private character image paths are treated as configuration-only and are not read, copied, rendered, or committed in Stage 5.
 
-`@amadeus/desktop` composes the packages into a Tauri application shell. The current React screen provides the rights-clean mock UI, uses the Hermes adapter mock reply helper, attaches GPT-SoVITS mock speech metadata, and displays static fallback renderer state. Real audio playback and private asset loading remain deferred.
+`@amadeus/desktop` composes the packages into a Tauri application shell. The current React screen provides the rights-clean mock UI, uses the Hermes adapter mock reply helper, attaches GPT-SoVITS mock speech metadata, displays static fallback renderer state, and can display one explicitly configured local-only private static character image during development. Real audio playback and Live2D model loading remain deferred.
 
 ## Security and Asset Hygiene
 
@@ -79,10 +79,12 @@ Stage 6 is limited to:
 - assistant reply to TTS mock metadata
 - speech job metadata on assistant messages
 - static renderer class metadata for speaking/idle state
+- optional local-only private static character image display from `.env.local`
 - local stop/replay state transitions
 
 Remaining deferred work:
 
-- private static character asset loading
+- committed private static character assets
+- Live2D model loading
 - real audio playback and audio lifecycle
 - real Hermes transport integration

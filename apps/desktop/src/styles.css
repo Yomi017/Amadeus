@@ -17,25 +17,21 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background:
-    radial-gradient(circle at 20% 10%, rgba(252, 214, 204, 0.34), transparent 30%),
-    linear-gradient(135deg, rgba(252, 250, 246, 0.96), rgba(241, 236, 229, 0.9));
+  overflow: hidden;
+  background: transparent;
 }
 
 .amadeus-shell {
+  position: relative;
   display: grid;
-  grid-template-columns: minmax(320px, 0.88fr) minmax(360px, 1fr);
-  gap: 18px;
+  grid-template-columns: minmax(300px, 1fr);
   min-height: 100vh;
-  padding: 18px;
+  padding: 10px;
 }
 
 .pet-stage,
 .chat-panel {
   min-width: 0;
-  border: 1px solid rgba(92, 80, 74, 0.16);
-  background: rgba(255, 253, 249, 0.78);
-  box-shadow: 0 18px 54px rgba(72, 53, 47, 0.16);
   backdrop-filter: blur(16px);
 }
 
@@ -43,7 +39,9 @@ body {
   display: grid;
   grid-template-rows: auto 1fr auto;
   overflow: hidden;
-  border-radius: 8px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .stage-toolbar,
@@ -52,7 +50,15 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 16px;
+  padding: 10px;
+}
+
+.stage-toolbar {
+  border: 1px solid rgba(92, 80, 74, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 253, 249, 0.72);
+  box-shadow: 0 10px 30px rgba(72, 53, 47, 0.12);
+  -webkit-app-region: drag;
 }
 
 .eyebrow {
@@ -89,6 +95,7 @@ button {
   cursor: pointer;
   font: inherit;
   font-weight: 700;
+  -webkit-app-region: no-drag;
 }
 
 button:hover {
@@ -103,12 +110,11 @@ button:hover {
 .character-frame {
   position: relative;
   display: grid;
-  min-height: 420px;
+  min-height: min(72vh, 620px);
   place-items: center;
   overflow: hidden;
-  background:
-    linear-gradient(180deg, rgba(255, 248, 242, 0.22), rgba(255, 255, 255, 0)),
-    repeating-linear-gradient(90deg, rgba(88, 69, 62, 0.04) 0 1px, transparent 1px 36px);
+  background: transparent;
+  -webkit-app-region: drag;
 }
 
 .fallback-character {
@@ -116,6 +122,20 @@ button:hover {
   width: min(68%, 300px);
   aspect-ratio: 0.72;
   animation: breathe 3.6s ease-in-out infinite;
+}
+
+.private-character {
+  width: min(94vw, 520px);
+  max-height: min(76vh, 660px);
+  object-fit: contain;
+  object-position: center bottom;
+  user-select: none;
+  filter: drop-shadow(0 24px 22px rgba(48, 34, 34, 0.22));
+  animation: breathe 3.6s ease-in-out infinite;
+}
+
+.private-character.is-speaking {
+  animation: breathe 3.6s ease-in-out infinite, speakPulse 0.48s ease-in-out infinite;
 }
 
 .fallback-character.is-speaking .mouth {
@@ -212,8 +232,8 @@ button:hover {
 
 .character-shadow {
   position: absolute;
-  bottom: 12%;
-  width: 42%;
+  bottom: 6%;
+  width: 52%;
   height: 24px;
   border-radius: 999px;
   background: rgba(65, 48, 48, 0.14);
@@ -223,7 +243,7 @@ button:hover {
 .asset-label {
   position: absolute;
   right: 14px;
-  bottom: 14px;
+  bottom: 10px;
   max-width: min(72%, 260px);
   border: 1px solid rgba(92, 80, 74, 0.14);
   border-radius: 8px;
@@ -239,7 +259,7 @@ button:hover {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
-  padding: 12px;
+  padding: 8px 0 0;
 }
 
 .status-pill {
@@ -273,11 +293,21 @@ button:hover {
 }
 
 .chat-panel {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 4;
   display: grid;
   grid-template-rows: auto 1fr auto;
+  width: min(420px, calc(100vw - 20px));
+  max-height: min(620px, calc(100vh - 20px));
   min-height: 0;
+  border: 1px solid rgba(92, 80, 74, 0.16);
   border-radius: 8px;
+  background: rgba(255, 253, 249, 0.88);
+  box-shadow: 0 18px 54px rgba(72, 53, 47, 0.18);
   overflow: hidden;
+  -webkit-app-region: no-drag;
 }
 
 .stage-badge {
@@ -385,6 +415,7 @@ textarea {
   background: rgba(255, 255, 255, 0.9);
   color: #2d272a;
   font: inherit;
+  -webkit-app-region: no-drag;
 }
 
 .composer-actions {
@@ -419,6 +450,16 @@ textarea {
   }
   50% {
     height: 12%;
+  }
+}
+
+@keyframes speakPulse {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-3px) scale(1.016);
   }
 }
 

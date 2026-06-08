@@ -2,9 +2,11 @@ import { useReducer } from "react";
 import { AMADEUS_STAGE, STAGE_6_SERVICE_STATUSES, type ChatMessage } from "@amadeus/core";
 import { FALLBACK_ASSET_DESCRIPTOR } from "@amadeus/renderer-static";
 import { initialChatShellState, reduceChatShellState } from "./chat-shell";
+import { getPrivateCharacterImage } from "./private-character";
 
 export function App() {
   const [state, dispatch] = useReducer(reduceChatShellState, initialChatShellState);
+  const privateCharacter = getPrivateCharacterImage();
 
   function sendMessage() {
     dispatch({
@@ -27,19 +29,34 @@ export function App() {
           </button>
         </div>
 
-        <div className={`character-frame emotion-${state.character.emotion} ${state.rendererClassName}`}>
-          <div className={`fallback-character ${state.character.speaking ? "is-speaking" : ""}`}>
-            <div className="hair hair-left" />
-            <div className="hair hair-right" />
-            <div className="head">
-              <span className="eye eye-left" />
-              <span className="eye eye-right" />
-              <span className={`mouth ${state.character.mouthOpen ? "open" : ""}`} />
+        <div
+          className={`character-frame emotion-${state.character.emotion} ${
+            privateCharacter.enabled ? "has-private-character" : "uses-fallback-character"
+          } ${state.rendererClassName}`}
+        >
+          {privateCharacter.enabled ? (
+            <img
+              className={`private-character ${state.character.speaking ? "is-speaking" : ""}`}
+              src={privateCharacter.src}
+              alt="Local private character"
+              draggable={false}
+            />
+          ) : (
+            <div className={`fallback-character ${state.character.speaking ? "is-speaking" : ""}`}>
+              <div className="hair hair-left" />
+              <div className="hair hair-right" />
+              <div className="head">
+                <span className="eye eye-left" />
+                <span className="eye eye-right" />
+                <span className={`mouth ${state.character.mouthOpen ? "open" : ""}`} />
+              </div>
+              <div className="body" />
+              <div className="ribbon" />
             </div>
-            <div className="body" />
-            <div className="ribbon" />
-          </div>
-          <span className="asset-label">{FALLBACK_ASSET_DESCRIPTOR.label}</span>
+          )}
+          <span className="asset-label">
+            {privateCharacter.enabled ? "Local private character" : FALLBACK_ASSET_DESCRIPTOR.label}
+          </span>
           <div className="character-shadow" />
         </div>
 

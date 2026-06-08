@@ -40,7 +40,7 @@ export const initialChatShellState: ChatShellState = {
   character: initialCharacter,
   rendererClassName: buildRendererClassName(initialCharacter),
   input: "",
-  chatOpen: true
+  chatOpen: false
 };
 
 export function buildMockAssistantReply(text: string): string {
