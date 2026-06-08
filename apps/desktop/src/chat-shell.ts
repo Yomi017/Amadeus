@@ -129,6 +129,7 @@ export function reduceChatShellState(state: ChatShellState, action: ChatShellAct
             role: message.role,
             text: message.text,
             speechTextJa: message.speechTextJa,
+            shouldSpeak: message.shouldSpeak,
             status: message.status === "pending" ? "complete" : message.status,
             createdAt: message.createdAt,
             speechState,
@@ -251,6 +252,7 @@ export function reduceChatShellState(state: ChatShellState, action: ChatShellAct
                 ...message,
                 text: action.reply.text,
                 speechTextJa: action.reply.speechTextJa,
+                shouldSpeak: action.reply.shouldSpeak,
                 status: "complete",
                 createdAt: action.reply.createdAt,
                 rendererClassName

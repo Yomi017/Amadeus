@@ -149,6 +149,7 @@ describe("chat shell reducer", () => {
         role: "assistant",
         text: "可以。",
         speechTextJa: "はい。",
+        shouldSpeak: true,
         emotion: "soft",
         createdAt: "2026-06-08T00:00:01.000Z",
         source: "hermes"
@@ -181,6 +182,7 @@ describe("chat shell reducer", () => {
     expect(replied.messages.at(-1)).toMatchObject({
       text: "可以。",
       speechTextJa: "はい。",
+      shouldSpeak: true,
       status: "complete"
     });
     expect(queued.messages.at(-1)?.speechState).toBe("queued");
@@ -206,6 +208,7 @@ describe("chat shell reducer", () => {
           role: "assistant",
           text: "晚上好。",
           speechTextJa: "こんばんは。",
+          shouldSpeak: false,
           status: "pending",
           createdAt: "2026-06-08T00:00:01.000Z",
           speechState: "speaking",
@@ -224,6 +227,7 @@ describe("chat shell reducer", () => {
     expect(restored.messages.at(-1)).toMatchObject({
       id: "assistant-stored",
       status: "complete",
+      shouldSpeak: false,
       speechState: undefined
     });
     expect(restored.messages.at(-1)?.speechJob).toBeUndefined();

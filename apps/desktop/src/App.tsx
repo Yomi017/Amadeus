@@ -74,6 +74,10 @@ export function App() {
       assistantReceived = true;
 
       const speechText = normalizedReply.speechTextJa || normalizedReply.text;
+      if (normalizedReply.shouldSpeak === false || !speechText.trim()) {
+        return;
+      }
+
       const ttsResult = await invoke<TtsResultDto>("synthesize_speech", {
         request: {
           id: `${ids.assistantId}-speech`,
@@ -219,6 +223,7 @@ interface AssistantReplyDto {
   readonly role: "assistant";
   readonly text: string;
   readonly speechTextJa?: string;
+  readonly shouldSpeak?: boolean;
   readonly emotion?: AssistantReply["emotion"];
   readonly createdAt: string;
   readonly source: AssistantReply["source"];
@@ -251,6 +256,7 @@ function toAssistantReply(reply: AssistantReplyDto): AssistantReply {
     role: "assistant",
     text: reply.text,
     speechTextJa: reply.speechTextJa,
+    shouldSpeak: reply.shouldSpeak,
     emotion: reply.emotion,
     createdAt: reply.createdAt,
     source: reply.source
@@ -333,6 +339,7 @@ function loadChatHistory(): readonly ChatMessage[] {
           role: item.role,
           text: item.text,
           speechTextJa: item.speechTextJa,
+          shouldSpeak: item.shouldSpeak,
           status: "complete",
           createdAt: item.createdAt,
           speechState: item.speechState
@@ -353,6 +360,7 @@ function saveChatHistory(messages: readonly ChatMessage[]) {
       role: message.role,
       text: message.text,
       speechTextJa: message.speechTextJa,
+      shouldSpeak: message.shouldSpeak,
       status: "complete",
       createdAt: message.createdAt,
       speechState: message.speechState === "failed" ? "failed" : undefined
@@ -370,6 +378,7 @@ function isStoredMessage(value: unknown): value is {
   readonly role: "user" | "assistant";
   readonly text: string;
   readonly speechTextJa?: string;
+  readonly shouldSpeak?: boolean;
   readonly createdAt: string;
   readonly speechState?: "failed";
 } {
@@ -383,6 +392,7 @@ function isStoredMessage(value: unknown): value is {
     (candidate.role === "user" || candidate.role === "assistant") &&
     typeof candidate.text === "string" &&
     (candidate.speechTextJa === undefined || typeof candidate.speechTextJa === "string") &&
+    (candidate.shouldSpeak === undefined || typeof candidate.shouldSpeak === "boolean") &&
     typeof candidate.createdAt === "string" &&
     (candidate.speechState === undefined || candidate.speechState === "failed")
   );

@@ -64,6 +64,7 @@ struct AssistantReplyDto {
     role: &'static str,
     text: String,
     speech_text_ja: String,
+    should_speak: bool,
     emotion: String,
     created_at: String,
     source: &'static str,
@@ -75,6 +76,7 @@ struct AssistantReplyDto {
 struct HermesJsonReply {
     reply_text: Option<String>,
     speech_text_ja: Option<String>,
+    should_speak: Option<bool>,
     emotion: Option<String>,
 }
 
@@ -158,6 +160,7 @@ fn send_chat_message(request: SendChatMessageRequest) -> Result<AssistantReplyDt
         role: "assistant",
         text: reply_text,
         speech_text_ja,
+        should_speak: parsed.should_speak.unwrap_or(true),
         emotion: normalize_emotion(parsed.emotion.as_deref()),
         created_at: utc_now_string(),
         source: "hermes",
@@ -213,11 +216,13 @@ fn build_hermes_prompt(user_text: &str) -> String {
 Respond to the user's message and return only compact JSON. No markdown, no commentary.
 
 Required JSON keys:
-{{"replyText":"visible answer","speechTextJa":"Japanese text for TTS","emotion":"neutral|soft|happy|focused"}}
+{{"replyText":"final visible answer","speechTextJa":"Japanese text for TTS","shouldSpeak":true,"emotion":"neutral|soft|happy|focused"}}
 
 Rules:
+- Output only the final answer intended for the user. Do not output hidden reasoning, chain-of-thought, internal plans, tool logs, progress notes, debug traces, or intermediate agent work.
 - replyText should answer naturally in the user's language.
-- speechTextJa must be a Japanese version spoken before TTS.
+- speechTextJa must be a Japanese version of only the final user-facing answer before TTS.
+- Set shouldSpeak to true only for the final user-facing answer. Set shouldSpeak to false for progress, tool status, diagnostics, or anything not meant to be spoken aloud.
 - Preserve protected tokens exactly in speechTextJa: code spans, URLs, file paths, commands, env vars, package names, model names, identifiers with underscores, numbers, versions, and bracketed placeholders.
 - Do not include secrets, private file paths, credentials, logs, or token values.
 - Keep both texts short enough for one desktop-pet bubble.
@@ -313,6 +318,7 @@ fn parse_hermes_reply(output: &str) -> Result<HermesJsonReply, String> {
     Ok(HermesJsonReply {
         reply_text: Some(trimmed.to_string()),
         speech_text_ja: None,
+        should_speak: Some(true),
         emotion: Some("soft".to_string()),
     })
 }
@@ -568,12 +574,13 @@ mod tests {
     #[test]
     fn parses_hermes_json_inside_extra_text() {
         let parsed = parse_hermes_reply(
-            r#"ignored {"replyText":"可以打开。","speechTextJa":"開けます。","emotion":"focused"} ignored"#,
+            r#"ignored {"replyText":"可以打开。","speechTextJa":"開けます。","shouldSpeak":false,"emotion":"focused"} ignored"#,
         )
         .expect("reply should parse");
 
         assert_eq!(parsed.reply_text.as_deref(), Some("可以打开。"));
         assert_eq!(parsed.speech_text_ja.as_deref(), Some("開けます。"));
+        assert_eq!(parsed.should_speak, Some(false));
         assert_eq!(parsed.emotion.as_deref(), Some("focused"));
     }
 

@@ -33,6 +33,7 @@ export interface ChatMessage {
   readonly role: ChatRole;
   readonly text: string;
   readonly speechTextJa?: string;
+  readonly shouldSpeak?: boolean;
   readonly status: ChatMessageStatus;
   readonly createdAt: string;
   readonly speechState?: SpeechJobState;
@@ -56,6 +57,7 @@ export interface AssistantReply {
   readonly role: "assistant";
   readonly text: string;
   readonly speechTextJa?: string;
+  readonly shouldSpeak?: boolean;
   readonly emotion?: CharacterEmotion;
   readonly createdAt: string;
   readonly source: AssistantReplySource;
