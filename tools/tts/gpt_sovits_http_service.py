@@ -16,6 +16,7 @@ import re
 import sys
 import tempfile
 import time
+import traceback
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -290,8 +291,17 @@ def make_handler(runtime: TtsRuntime) -> type[BaseHTTPRequestHandler]:
             except ClientError as error:
                 self.send_json(HTTPStatus.BAD_REQUEST, {"error": str(error)})
                 return
-            except Exception:
-                self.send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "GPT-SoVITS synthesis failed"})
+            except Exception as error:
+                error_id = digest_text(f"{type(error).__name__}:{error}")[:10]
+                log_safe_exception(error_id, error)
+                self.send_json(
+                    HTTPStatus.INTERNAL_SERVER_ERROR,
+                    {
+                        "error": "GPT-SoVITS synthesis failed",
+                        "errorId": error_id,
+                        "errorKind": type(error).__name__,
+                    },
+                )
                 return
             self.send_json(HTTPStatus.OK, result)
 
@@ -336,6 +346,24 @@ def make_handler(runtime: TtsRuntime) -> type[BaseHTTPRequestHandler]:
             return
 
     return Handler
+
+
+def log_safe_exception(error_id: str, error: Exception) -> None:
+    print(f"[tts-error:{error_id}] {type(error).__name__}: {sanitize_log_text(str(error))}", file=sys.stderr, flush=True)
+    for line in traceback.format_exc().splitlines()[-16:]:
+        print(f"[tts-error:{error_id}] {sanitize_log_text(line)}", file=sys.stderr, flush=True)
+
+
+def sanitize_log_text(text: str) -> str:
+    sanitized = text
+    for pattern in [
+        re.compile(r"(?:/home|/Users|/mnt/c/Users)/[^\s'\"<>)]*", re.I),
+        re.compile(r"[A-Z]:\\Users\\[^\s'\"<>)]*", re.I),
+        re.compile(r"(?:token|secret|credential|password|cookie|api[_-]?key)\s*[:=]\s*[^\s'\"<>]+", re.I),
+        re.compile(r"Authorization\s*:\s*Bearer\s+[A-Za-z0-9._~+/-]{8,}", re.I),
+    ]:
+        sanitized = pattern.sub("[redacted]", sanitized)
+    return sanitized[:500]
 
 
 def env_path(name: str, fallback: str) -> Path:

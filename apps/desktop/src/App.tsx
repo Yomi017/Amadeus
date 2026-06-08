@@ -6,6 +6,8 @@ import { ensurePetWindowMode } from "./pet-window-mode";
 import { getPrivateCharacterImage } from "./private-character";
 import { dragCurrentWindow } from "./window-drag";
 
+const CHAT_HISTORY_KEY = "amadeus.chat.history.v1";
+
 export function App() {
   const [state, dispatch] = useReducer(reduceChatShellState, initialChatShellState);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -15,6 +17,20 @@ export function App() {
   useEffect(() => {
     ensurePetWindowMode();
   }, []);
+
+  useEffect(() => {
+    const restored = loadChatHistory();
+    if (restored.length > 0) {
+      dispatch({
+        type: "restore-history",
+        messages: restored
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    saveChatHistory(state.messages);
+  }, [state.messages]);
 
   useEffect(() => {
     return () => {
@@ -294,9 +310,82 @@ function statusLabel(message: ChatMessage): string {
     return "speaking";
   }
   if (message.speechState === "failed") {
-    return "voice failed";
+    return message.speechJob?.error ? `voice failed: ${message.speechJob.error}` : "voice failed";
   }
   return "ready";
+}
+
+function loadChatHistory(): readonly ChatMessage[] {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(CHAT_HISTORY_KEY) ?? "[]") as unknown;
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed.flatMap((item): ChatMessage[] => {
+      if (!isStoredMessage(item)) {
+        return [];
+      }
+
+      return [
+        {
+          id: item.id,
+          role: item.role,
+          text: item.text,
+          speechTextJa: item.speechTextJa,
+          status: "complete",
+          createdAt: item.createdAt,
+          speechState: item.speechState
+        }
+      ];
+    });
+  } catch {
+    return [];
+  }
+}
+
+function saveChatHistory(messages: readonly ChatMessage[]) {
+  const stored = messages
+    .filter((message) => message.role === "user" || message.role === "assistant")
+    .slice(-30)
+    .map((message) => ({
+      id: message.id,
+      role: message.role,
+      text: message.text,
+      speechTextJa: message.speechTextJa,
+      status: "complete",
+      createdAt: message.createdAt,
+      speechState: message.speechState === "failed" ? "failed" : undefined
+    }));
+
+  try {
+    window.localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(stored));
+  } catch {
+    return;
+  }
+}
+
+function isStoredMessage(value: unknown): value is {
+  readonly id: string;
+  readonly role: "user" | "assistant";
+  readonly text: string;
+  readonly speechTextJa?: string;
+  readonly createdAt: string;
+  readonly speechState?: "failed";
+} {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.id === "string" &&
+    (candidate.role === "user" || candidate.role === "assistant") &&
+    typeof candidate.text === "string" &&
+    (candidate.speechTextJa === undefined || typeof candidate.speechTextJa === "string") &&
+    typeof candidate.createdAt === "string" &&
+    (candidate.speechState === undefined || candidate.speechState === "failed")
+  );
 }
 
 function safeErrorMessage(error: unknown): string {

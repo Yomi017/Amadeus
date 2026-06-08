@@ -14,8 +14,10 @@ AMADEUS_TTS_SOVITS_CHECKPOINT=/path/to/private/model.pth \
 AMADEUS_TTS_REF_AUDIO=/path/to/private/reference.ogg \
 AMADEUS_TTS_REF_TEXT='reference transcript in Japanese' \
 AMADEUS_TTS_OUTPUT_DIR=/path/to/runtime/tts-cache \
-python tools/tts/gpt_sovits_http_service.py
+/path/to/GPTSoVits-env/bin/python tools/tts/gpt_sovits_http_service.py
 ```
+
+The service must run in the same Python environment that can import GPT-SoVITS runtime dependencies such as `soundfile`, `torch`, and `torchaudio`.
 
 Use dry-run mode for integration checks without loading GPT-SoVITS:
 

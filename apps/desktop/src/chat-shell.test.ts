@@ -189,4 +189,43 @@ describe("chat shell reducer", () => {
     expect(completed.character.speaking).toBe(false);
     expect(completed.messages.at(-1)?.speechState).toBe("complete");
   });
+
+  it("restores chat history without reviving active speech jobs", () => {
+    const restored = reduceChatShellState(initialChatShellState, {
+      type: "restore-history",
+      messages: [
+        {
+          id: "user-stored",
+          role: "user",
+          text: "こんばんは",
+          status: "complete",
+          createdAt: "2026-06-08T00:00:00.000Z"
+        },
+        {
+          id: "assistant-stored",
+          role: "assistant",
+          text: "晚上好。",
+          speechTextJa: "こんばんは。",
+          status: "pending",
+          createdAt: "2026-06-08T00:00:01.000Z",
+          speechState: "speaking",
+          speechJob: {
+            id: "private-audio-job",
+            state: "speaking",
+            text: "こんばんは。"
+          }
+        }
+      ]
+    });
+
+    expect(restored.busy).toBe(false);
+    expect(restored.activeSpeechJob).toBeUndefined();
+    expect(restored.messages).toHaveLength(3);
+    expect(restored.messages.at(-1)).toMatchObject({
+      id: "assistant-stored",
+      status: "complete",
+      speechState: undefined
+    });
+    expect(restored.messages.at(-1)?.speechJob).toBeUndefined();
+  });
 });

@@ -17,6 +17,7 @@ export interface ChatShellState {
 export type ChatShellAction =
   | { readonly type: "set-input"; readonly value: string }
   | { readonly type: "toggle-chat" }
+  | { readonly type: "restore-history"; readonly messages: readonly ChatMessage[] }
   | { readonly type: "send"; readonly text: string; readonly now: string }
   | { readonly type: "submit-user"; readonly text: string; readonly userId: string; readonly assistantId: string; readonly now: string }
   | { readonly type: "assistant-received"; readonly messageId: string; readonly reply: AssistantReply; readonly detail?: string }
@@ -118,6 +119,31 @@ export function reduceChatShellState(state: ChatShellState, action: ChatShellAct
       return { ...state, input: action.value };
     case "toggle-chat":
       return { ...state, chatOpen: !state.chatOpen };
+    case "restore-history": {
+      const restoredMessages: ChatMessage[] = action.messages
+        .filter((message) => message.role === "user" || message.role === "assistant")
+        .map((message): ChatMessage => {
+          const speechState = message.speechState === "failed" ? message.speechState : undefined;
+          return {
+            id: message.id,
+            role: message.role,
+            text: message.text,
+            speechTextJa: message.speechTextJa,
+            status: message.status === "pending" ? "complete" : message.status,
+            createdAt: message.createdAt,
+            speechState,
+            rendererClassName: message.rendererClassName
+          };
+        })
+        .slice(-30);
+
+      return {
+        ...state,
+        messages: restoredMessages.length > 0 ? [initialMessage, ...restoredMessages] : state.messages,
+        busy: false,
+        activeSpeechJob: undefined
+      };
+    }
     case "send": {
       const text = action.text.trim();
       if (!text) {
@@ -365,7 +391,14 @@ export function reduceChatShellState(state: ChatShellState, action: ChatShellAct
             ? {
                 ...message,
                 speechState: "failed",
-                speechJob: message.speechJob ? { ...message.speechJob, state: "failed" } : undefined,
+                speechJob: message.speechJob
+                  ? { ...message.speechJob, state: "failed", error: action.error }
+                  : {
+                      id: `${action.messageId}-speech-failed`,
+                      state: "failed",
+                      text: "",
+                      error: action.error
+                    },
                 rendererClassName
               }
             : message

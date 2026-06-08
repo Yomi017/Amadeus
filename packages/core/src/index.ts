@@ -25,6 +25,7 @@ export interface SpeechJob {
   readonly state: SpeechJobState;
   readonly text: string;
   readonly result?: TtsSynthesisResult;
+  readonly error?: string;
 }
 
 export interface ChatMessage {

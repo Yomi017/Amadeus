@@ -104,6 +104,14 @@ struct TtsServiceResultDto {
     cached: Option<bool>,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ServiceErrorDto {
+    error: Option<String>,
+    error_id: Option<String>,
+    error_kind: Option<String>,
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct TtsResultDto {
@@ -366,10 +374,21 @@ fn post_loopback_json(endpoint: &LoopbackEndpoint, path: &str, body: &str, timeo
         .ok_or_else(|| "GPT-SoVITS returned an invalid HTTP response".to_string())?;
     let status_line = headers.lines().next().unwrap_or("");
     if !status_line.contains(" 200 ") {
-        return Err("GPT-SoVITS synthesis failed".to_string());
+        return Err(parse_service_error(response_body));
     }
 
     Ok(response_body.to_string())
+}
+
+fn parse_service_error(response_body: &str) -> String {
+    if let Ok(error) = serde_json::from_str::<ServiceErrorDto>(response_body) {
+        let label = error.error.unwrap_or_else(|| "GPT-SoVITS synthesis failed".to_string());
+        let kind = error.error_kind.unwrap_or_else(|| "unknown".to_string());
+        let id = error.error_id.unwrap_or_else(|| "no-id".to_string());
+        return format!("{} ({} #{})", label, kind, id);
+    }
+
+    "GPT-SoVITS synthesis failed".to_string()
 }
 
 fn clean_user_text(text: &str, max_length: usize) -> Result<String, String> {
