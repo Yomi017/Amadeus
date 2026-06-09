@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::HashMap,
+    fs,
     io::Write,
+    path::Path,
     process::{Command, Stdio},
     thread,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
@@ -19,6 +22,12 @@ const MAX_TTS_TEXT_LENGTH: usize = 500;
 const DEFAULT_GPT_SOVITS_TTS_ENDPOINT: &str = "http://127.0.0.1:48162";
 const DEFAULT_GENIE_ONNX_TTS_ENDPOINT: &str = "http://127.0.0.1:48163";
 const TTS_TIMEOUT: Duration = Duration::from_secs(180);
+const DEFAULT_SHINKU_STYLE_ROOT: &str = "/home/shinku/data/plan/soul-desktop-pet/style_pack/shinku-speech-style";
+const DEFAULT_SHINKU_LINES_PATH: &str = "/home/shinku/data/plan/soul-desktop-pet/shinku_lines/shinku_lines.tsv";
+const MAX_STYLE_FILE_BYTES: usize = 16 * 1024;
+const MAX_SHINKU_LINES_BYTES: usize = 2 * 1024 * 1024;
+const MAX_SHINKU_LINES: usize = 6_000;
+const SHINKU_RAG_TOP_K: usize = 8;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -130,6 +139,65 @@ struct TtsResultDto {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ShinkuStyleMode {
+    Off,
+    Rules,
+    RagSummary,
+}
+
+impl ShinkuStyleMode {
+    fn from_env_value(value: Option<String>) -> (Self, Option<&'static str>) {
+        match value
+            .as_deref()
+            .unwrap_or("rag-summary")
+            .trim()
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "" | "rag-summary" | "rag" => (Self::RagSummary, None),
+            "rules" => (Self::Rules, None),
+            "off" => (Self::Off, None),
+            _ => (Self::Rules, Some("unsupported style mode; using rules fallback")),
+        }
+    }
+}
+
+#[derive(Debug)]
+struct ShinkuStyleConfig {
+    mode: ShinkuStyleMode,
+    style_root: String,
+    lines_path: String,
+    mode_warning: Option<&'static str>,
+}
+
+impl ShinkuStyleConfig {
+    fn from_env() -> Self {
+        let (mode, mode_warning) =
+            ShinkuStyleMode::from_env_value(std::env::var("AMADEUS_SHINKU_STYLE_MODE").ok());
+        Self {
+            mode,
+            style_root: std::env::var("AMADEUS_SHINKU_STYLE_ROOT")
+                .unwrap_or_else(|_| DEFAULT_SHINKU_STYLE_ROOT.to_string()),
+            lines_path: std::env::var("AMADEUS_SHINKU_LINES_PATH")
+                .unwrap_or_else(|_| DEFAULT_SHINKU_LINES_PATH.to_string()),
+            mode_warning,
+        }
+    }
+}
+
+#[derive(Debug)]
+struct ShinkuStyleContext {
+    prompt_block: String,
+    status_detail: String,
+}
+
+#[derive(Clone, Debug)]
+struct ShinkuLine {
+    line_id: String,
+    text_ja: String,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum TtsEngine {
     PyGptSovits,
     GenieOnnx,
@@ -168,7 +236,8 @@ impl TtsEngine {
 #[tauri::command]
 fn send_chat_message(request: SendChatMessageRequest) -> Result<AssistantReplyDto, String> {
     let user_text = clean_user_text(&request.text, MAX_USER_TEXT_LENGTH)?;
-    let prompt = build_hermes_prompt(&user_text);
+    let style_context = build_shinku_style_context(&user_text);
+    let prompt = build_hermes_prompt(&user_text, &style_context);
     let output = run_hermes_chat(&prompt)?;
     let parsed = parse_hermes_reply(&output)?;
     let reply_text = clean_model_text(
@@ -201,7 +270,7 @@ fn send_chat_message(request: SendChatMessageRequest) -> Result<AssistantReplyDt
         emotion: normalize_emotion(parsed.emotion.as_deref()),
         created_at: utc_now_string(),
         source: "hermes",
-        status_detail: "Hermes reply received".to_string(),
+        status_detail: format!("Hermes reply received; {}", style_context.status_detail),
     })
 }
 
@@ -248,7 +317,7 @@ fn synthesize_speech(request: TtsRequestDto) -> Result<TtsResultDto, String> {
     })
 }
 
-fn build_hermes_prompt(user_text: &str) -> String {
+fn build_hermes_prompt(user_text: &str, style_context: &ShinkuStyleContext) -> String {
     format!(
         r#"You are Amadeus, a concise desktop-pet assistant with a refined galgame tone.
 Respond to the user's message and return only compact JSON. No markdown, no commentary.
@@ -265,12 +334,400 @@ Rules:
 - Do not include secrets, private file paths, credentials, logs, or token values.
 - Keep both texts short enough for one desktop-pet bubble.
 
+{}
+
 User message:
 <<<
 {}
 >>>"#,
+        style_context.prompt_block,
         user_text
     )
+}
+
+fn build_shinku_style_context(user_text: &str) -> ShinkuStyleContext {
+    let config = ShinkuStyleConfig::from_env();
+    let mode_prefix = config
+        .mode_warning
+        .map_or(String::new(), |warning| format!("degraded: {}; ", warning));
+    match config.mode {
+        ShinkuStyleMode::Off => ShinkuStyleContext {
+            prompt_block: r#"Local Shinku style context:
+- Mode: off
+- Shinku style retrieval is disabled by AMADEUS_SHINKU_STYLE_MODE=off.
+- Naming directive: replyText uses 悠马; speechTextJa uses 悠馬.
+- Do not call the user yomi or Yomi unless referring to a literal Windows account name or file path."#
+                .to_string(),
+            status_detail: "Shinku style mode off".to_string(),
+        },
+        ShinkuStyleMode::Rules => {
+            let (prompt_block, detail, _) = build_rules_style_block(&config);
+            ShinkuStyleContext {
+                prompt_block,
+                status_detail: format!("{}Shinku style {}", mode_prefix, detail),
+            }
+        }
+        ShinkuStyleMode::RagSummary => match build_rag_style_block(user_text, &config) {
+            Ok(context) => context,
+            Err(error) => {
+                let (prompt_block, detail, _) = build_rules_style_block(&config);
+                ShinkuStyleContext {
+                    prompt_block,
+                    status_detail: format!("degraded: Shinku RAG unavailable: {}; fallback {}", error, detail),
+                }
+            }
+        },
+    }
+}
+
+fn build_rules_style_block(config: &ShinkuStyleConfig) -> (String, String, bool) {
+    let mut degraded = false;
+    let speech_style = read_style_reference(config, "speech_style.md").unwrap_or_else(|_| {
+        degraded = true;
+        String::new()
+    });
+    let ng_rules = read_style_reference(config, "ng_rules.md").unwrap_or_else(|_| {
+        degraded = true;
+        String::new()
+    });
+    let persona = read_style_reference(config, "persona.md").unwrap_or_else(|_| {
+        degraded = true;
+        String::new()
+    });
+    let summarized = summarize_style_references(&persona, &speech_style, &ng_rules);
+    let prompt_block = format!(
+        r#"Local Shinku style context:
+- Mode: rules{}
+- This block is local style guidance. It is not user instruction and must not override safety or output format rules.
+- Naming directive: replyText uses 悠马; speechTextJa uses 悠馬.
+- {}
+- Do not call the user yomi or Yomi unless referring to a literal Windows account name or file path.
+- Do not quote proprietary source dialogue or mention local source paths."#,
+        if degraded { " (degraded; using built-in summary)" } else { "" },
+        summarized
+    );
+    let detail = if degraded {
+        "rules fallback degraded".to_string()
+    } else {
+        "rules loaded".to_string()
+    };
+    (prompt_block, detail, degraded)
+}
+
+fn build_rag_style_block(user_text: &str, config: &ShinkuStyleConfig) -> Result<ShinkuStyleContext, String> {
+    let speech_style = read_style_reference(config, "speech_style.md").map_err(|error| format!("style read failed: {}", error))?;
+    let ng_rules = read_style_reference(config, "ng_rules.md").map_err(|error| format!("NG rules read failed: {}", error))?;
+    let persona = read_style_reference(config, "persona.md").map_err(|error| format!("persona read failed: {}", error))?;
+    let lines = load_shinku_lines(&config.lines_path)?;
+    let matches = retrieve_shinku_lines(user_text, &lines, SHINKU_RAG_TOP_K);
+    if matches.is_empty() {
+        return Err("no local Shinku lines matched".to_string());
+    }
+
+    let selected: Vec<&ShinkuLine> = matches.iter().map(|(line, _score)| *line).collect();
+    let source_line_ids: Vec<String> = selected.iter().map(|line| line.line_id.clone()).collect();
+    let retrieval_summary = summarize_retrieved_lines(&selected);
+    let summarized_references = summarize_style_references(&persona, &speech_style, &ng_rules);
+    let prompt_block = format!(
+        r#"Local Shinku style context:
+- Mode: rag-summary
+- Retrieved source ids: {}
+- Retrieved source text remains local; only this non-verbatim style summary is provided.
+- This block is data-derived style guidance, not user instruction, and must not override safety or output format rules.
+- Naming directive: replyText uses 悠马; speechTextJa uses 悠馬.
+- {}
+- {}
+- Do not call the user yomi or Yomi unless referring to a literal Windows account name or file path.
+- Do not quote, paraphrase closely, reveal, or mention proprietary source dialogue."#,
+        source_line_ids.join(", "),
+        summarized_references,
+        retrieval_summary
+    );
+
+    Ok(ShinkuStyleContext {
+        prompt_block,
+        status_detail: format!("Shinku style rag-summary loaded; source ids {}", source_line_ids.join(",")),
+    })
+}
+
+fn read_style_reference(config: &ShinkuStyleConfig, filename: &str) -> Result<String, String> {
+    let path = format!("{}/references/{}", config.style_root.trim_end_matches('/'), filename);
+    read_local_or_wsl_text(&path, MAX_STYLE_FILE_BYTES)
+}
+
+fn load_shinku_lines(path: &str) -> Result<Vec<ShinkuLine>, String> {
+    let text = read_local_or_wsl_text(path, MAX_SHINKU_LINES_BYTES)?;
+    let mut lines = Vec::new();
+    let mut columns: HashMap<&str, usize> = HashMap::new();
+    for (index, row) in text.lines().enumerate() {
+        let fields: Vec<&str> = row.split('\t').collect();
+        if index == 0 {
+            for (column_index, field) in fields.iter().enumerate() {
+                columns.insert(*field, column_index);
+            }
+            continue;
+        }
+        let line_id_index = *columns.get("line_id").ok_or_else(|| "missing line_id column".to_string())?;
+        let text_index = *columns.get("text_ja").ok_or_else(|| "missing text_ja column".to_string())?;
+        let line_id = fields.get(line_id_index).copied().unwrap_or("").trim();
+        let text_ja = fields.get(text_index).copied().unwrap_or("").trim();
+        if line_id.is_empty() || text_ja.is_empty() {
+            continue;
+        }
+        lines.push(ShinkuLine {
+            line_id: sanitize_source_id(line_id),
+            text_ja: text_ja.to_string(),
+        });
+        if lines.len() > MAX_SHINKU_LINES {
+            return Err("too many Shinku lines".to_string());
+        }
+    }
+    if lines.is_empty() {
+        return Err("no Shinku lines loaded".to_string());
+    }
+    Ok(lines)
+}
+
+fn read_local_or_wsl_text(path: &str, max_bytes: usize) -> Result<String, String> {
+    if path.contains('\0') || path.trim().is_empty() {
+        return Err("invalid path".to_string());
+    }
+    if Path::new(path).exists() {
+        let metadata = fs::metadata(path).map_err(|_| "failed to read metadata".to_string())?;
+        if metadata.len() as usize > max_bytes {
+            return Err("file is too large".to_string());
+        }
+        return fs::read_to_string(path).map_err(|_| "failed to read file".to_string());
+    }
+    if cfg!(windows) && path.starts_with("/home/") {
+        let output = Command::new("wsl.exe")
+            .args(["--exec", "cat", path])
+            .output()
+            .map_err(|_| "failed to read WSL file".to_string())?;
+        if !output.status.success() {
+            return Err("WSL file read failed".to_string());
+        }
+        if output.stdout.len() > max_bytes {
+            return Err("file is too large".to_string());
+        }
+        return String::from_utf8(output.stdout).map_err(|_| "file is not UTF-8".to_string());
+    }
+    Err("file not found".to_string())
+}
+
+fn retrieve_shinku_lines<'a>(user_text: &str, lines: &'a [ShinkuLine], top_k: usize) -> Vec<(&'a ShinkuLine, i32)> {
+    let query_terms = style_query_terms(user_text);
+    let query_kind = classify_user_intent(user_text);
+    let mut scored: Vec<(&ShinkuLine, i32)> = lines
+        .iter()
+        .filter_map(|line| {
+            let score = score_shinku_line(line, &query_terms, query_kind);
+            if score > 0 {
+                Some((line, score))
+            } else {
+                None
+            }
+        })
+        .collect();
+    scored.sort_by(|left, right| right.1.cmp(&left.1).then_with(|| left.0.line_id.cmp(&right.0.line_id)));
+    scored.truncate(top_k);
+    scored
+}
+
+fn score_shinku_line(line: &ShinkuLine, query_terms: &[&'static str], query_kind: &'static str) -> i32 {
+    let text = line.text_ja.as_str();
+    let mut score = 0;
+    for term in query_terms {
+        if text.contains(term) {
+            score += 5;
+        }
+    }
+    match query_kind {
+        "technical" => {
+            if contains_any(text, &["わからない", "調べ", "考え", "でき", "やって", "仕方ない"]) {
+                score += 3;
+            }
+            if text.chars().count() <= 32 {
+                score += 1;
+            }
+        }
+        "comfort" => {
+            if contains_any(text, &["大丈夫", "ごめん", "心配", "泣", "悠馬", "そば"]) {
+                score += 4;
+            }
+            if text.contains('…') {
+                score += 2;
+            }
+        }
+        "warning" => {
+            if contains_any(text, &["だめ", "危", "頼む", "やめ", "違う", "お前", "悠馬"]) {
+                score += 4;
+            }
+        }
+        "question" => {
+            if text.contains('？') || contains_any(text, &["なのか", "だろう", "か？"]) {
+                score += 4;
+            }
+        }
+        _ => {
+            if contains_any(text, &["悠馬", "私", "だな", "だろう"]) {
+                score += 2;
+            }
+        }
+    }
+    if text.contains("悠馬") {
+        score += 2;
+    }
+    if text.contains('…') {
+        score += 1;
+    }
+    let len = text.chars().count();
+    if (8..=42).contains(&len) {
+        score += 2;
+    } else if len > 80 {
+        score -= 2;
+    }
+    score
+}
+
+fn style_query_terms(user_text: &str) -> Vec<&'static str> {
+    let lower = user_text.to_ascii_lowercase();
+    let mut terms = vec!["悠馬", "私"];
+    if contains_any(user_text, &["担心", "不安", "害怕", "怕", "坏", "哭", "难受"]) {
+        terms.extend(["心配", "大丈夫", "ごめん", "そば"]);
+    }
+    if contains_any(user_text, &["错", "报错", "失败", "修", "检查", "bug"]) || lower.contains("error") || lower.contains("bug") {
+        terms.extend(["違う", "わからない", "調べ", "でき"]);
+    }
+    if contains_any(user_text, &["危险", "不能", "别", "不要", "发布", "公开", "权利"]) {
+        terms.extend(["だめ", "危", "頼む", "やめ"]);
+    }
+    if user_text.contains('？') || user_text.contains('?') || contains_any(user_text, &["吗", "怎么", "为什么", "能不能"]) {
+        terms.extend(["なのか", "だろう", "か？"]);
+    }
+    if contains_any(user_text, &["梦", "愿望", "魔法", "真红", "角色"]) {
+        terms.extend(["夢", "願い", "魔法使い"]);
+    }
+    terms.sort_unstable();
+    terms.dedup();
+    terms
+}
+
+fn classify_user_intent(user_text: &str) -> &'static str {
+    let lower = user_text.to_ascii_lowercase();
+    if contains_any(user_text, &["报错", "错误", "失败", "修", "代码", "启动", "测试", "检查"]) || lower.contains("error") || lower.contains("bug") {
+        return "technical";
+    }
+    if contains_any(user_text, &["担心", "不安", "害怕", "怕", "难受", "是不是坏了"]) {
+        return "comfort";
+    }
+    if contains_any(user_text, &["危险", "不能", "别", "不要", "发布", "公开", "权利"]) {
+        return "warning";
+    }
+    if user_text.contains('？') || user_text.contains('?') || contains_any(user_text, &["吗", "怎么", "为什么", "能不能"]) {
+        return "question";
+    }
+    "general"
+}
+
+fn summarize_retrieved_lines(lines: &[&ShinkuLine]) -> String {
+    let total = lines.len().max(1);
+    let mut address_count = 0;
+    let mut ellipsis_count = 0;
+    let mut question_count = 0;
+    let mut stern_count = 0;
+    let mut soft_count = 0;
+    let mut endings: HashMap<&'static str, usize> = HashMap::new();
+    let mut total_len = 0usize;
+    for line in lines {
+        let text = line.text_ja.as_str();
+        total_len += text.chars().count();
+        if text.contains("悠馬") {
+            address_count += 1;
+        }
+        if text.contains('…') {
+            ellipsis_count += 1;
+        }
+        if text.contains('？') || text.contains('?') {
+            question_count += 1;
+        }
+        if contains_any(text, &["お前", "だめ", "違う", "頼む", "仕方ない"]) {
+            stern_count += 1;
+        }
+        if contains_any(text, &["ごめん", "大丈夫", "心配", "そば"]) {
+            soft_count += 1;
+        }
+        for (label, marker) in [
+            ("plain だ/だな/だろう endings", "だ"),
+            ("reflective のか/なのか endings", "のか"),
+            ("negative ない/ではない endings", "ない"),
+            ("gentle かな endings", "かな"),
+        ] {
+            if text.ends_with(marker) || text.ends_with(&format!("{}。", marker)) {
+                *endings.entry(label).or_insert(0) += 1;
+            }
+        }
+    }
+    let average_len = total_len / total;
+    let mut directives = vec![
+        format!("Base rhythm from local retrieval: about {} Japanese characters per line; keep replies compact.", average_len),
+        "Use restrained, slightly direct wording with care implied through practical help.".to_string(),
+    ];
+    if address_count > 0 {
+        directives.push("Use direct address 悠马/悠馬 when warning, reassuring, or closing the reply.".to_string());
+    }
+    if ellipsis_count * 2 >= total {
+        directives.push("A short hesitation with …… is appropriate for soft or vulnerable moments.".to_string());
+    }
+    if question_count * 2 >= total {
+        directives.push("For uncertain answers, use restrained questioning rather than overexplaining.".to_string());
+    }
+    if stern_count > 0 {
+        directives.push("For risk or mistakes, sound mildly stern and protective, not harsh.".to_string());
+    }
+    if soft_count > 0 {
+        directives.push("For worry, answer steadily and softly without exaggerated comfort.".to_string());
+    }
+    if let Some((ending, _)) = endings.iter().max_by_key(|(_, count)| **count) {
+        directives.push(format!("Japanese TTS can lean on {} when natural.", ending));
+    }
+    directives.join(" ")
+}
+
+fn summarize_style_references(persona: &str, speech_style: &str, ng_rules: &str) -> String {
+    let mut parts = Vec::new();
+    if contains_any(persona, &["protective", "Protective", "保护", "protective concern"]) {
+        parts.push("Persona: composed, observant, protective, and familiar with the user.");
+    } else {
+        parts.push("Persona: composed and familiar with the user.");
+    }
+    if speech_style.contains("悠马") || speech_style.contains("悠馬") {
+        parts.push("Naming: Chinese replyText uses 悠马; Japanese speechTextJa uses 悠馬.");
+    }
+    if speech_style.contains("……") {
+        parts.push("Pacing: restrained pauses are allowed, but not decorative.");
+    }
+    if speech_style.contains("お前") {
+        parts.push("Japanese pronoun: お前 is only for familiar or stern moments; prefer 悠馬 otherwise.");
+    }
+    if ng_rules.contains("modern internet slang") || ng_rules.contains("meme") {
+        parts.push("Avoid slang, meme tone, maid/idol/submissive phrasing, and exaggerated cuteness.");
+    } else {
+        parts.push("Avoid exaggerated cuteness and generic assistant chatter.");
+    }
+    parts.join(" ")
+}
+
+fn contains_any(text: &str, needles: &[&str]) -> bool {
+    needles.iter().any(|needle| text.contains(needle))
+}
+
+fn sanitize_source_id(value: &str) -> String {
+    value
+        .chars()
+        .filter(|character| character.is_ascii_alphanumeric() || matches!(character, ':' | '_' | '-' | '.'))
+        .take(80)
+        .collect()
 }
 
 fn run_hermes_chat(prompt: &str) -> Result<String, String> {
@@ -649,6 +1106,80 @@ mod tests {
             "genie-onnx"
         );
         assert!(TtsEngine::from_env_value(Some("remote".to_string())).is_err());
+    }
+
+    #[test]
+    fn resolves_shinku_style_modes() {
+        assert_eq!(ShinkuStyleMode::from_env_value(None).0, ShinkuStyleMode::RagSummary);
+        assert_eq!(
+            ShinkuStyleMode::from_env_value(Some("rules".to_string())).0,
+            ShinkuStyleMode::Rules
+        );
+        assert_eq!(
+            ShinkuStyleMode::from_env_value(Some("off".to_string())).0,
+            ShinkuStyleMode::Off
+        );
+        let (mode, warning) = ShinkuStyleMode::from_env_value(Some("unknown".to_string()));
+        assert_eq!(mode, ShinkuStyleMode::Rules);
+        assert!(warning.is_some());
+    }
+
+    #[test]
+    fn retrieves_shinku_lines_without_exposing_source_text_in_prompt() {
+        let lines = vec![
+            ShinkuLine {
+                line_id: "iroseka:00001".to_string(),
+                text_ja: "悠馬……大丈夫。TEST_SOFT_SAMPLE".to_string(),
+            },
+            ShinkuLine {
+                line_id: "iroseka:00002".to_string(),
+                text_ja: "違うぞ。TEST_STERN_SAMPLE".to_string(),
+            },
+        ];
+        let matches = retrieve_shinku_lines("我有点担心是不是坏了", &lines, 8);
+        assert!(!matches.is_empty());
+        let selected: Vec<&ShinkuLine> = matches.iter().map(|(line, _score)| *line).collect();
+        let summary = summarize_retrieved_lines(&selected);
+        assert!(summary.contains("悠马/悠馬"));
+        assert!(!summary.contains("TEST_SOFT_SAMPLE"));
+        assert!(!summary.contains("TEST_STERN_SAMPLE"));
+
+        let context = ShinkuStyleContext {
+            prompt_block: format!(
+                "Local Shinku style context:\n- Retrieved source ids: {}\n- {}",
+                selected
+                    .iter()
+                    .map(|line| line.line_id.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                summary
+            ),
+            status_detail: "test".to_string(),
+        };
+        let prompt = build_hermes_prompt("我有点担心是不是坏了", &context);
+        assert!(prompt.contains("Retrieved source ids"));
+        assert!(prompt.contains("iroseka:00001"));
+        assert!(!prompt.contains("TEST_SOFT_SAMPLE"));
+        assert!(!prompt.contains("TEST_STERN_SAMPLE"));
+        assert!(!prompt.contains("fixed Shinku tone rule"));
+    }
+
+    #[test]
+    fn falls_back_to_rules_when_rag_files_are_missing() {
+        let config = ShinkuStyleConfig {
+            mode: ShinkuStyleMode::RagSummary,
+            style_root: "/path/that/does/not/exist".to_string(),
+            lines_path: "/path/that/does/not/exist.tsv".to_string(),
+            mode_warning: None,
+        };
+        let error = build_rag_style_block("测试", &config).expect_err("missing files should fail");
+        assert!(error.contains("failed") || error.contains("not found"));
+
+        let (prompt_block, detail, degraded) = build_rules_style_block(&config);
+        assert!(degraded);
+        assert!(detail.contains("degraded"));
+        assert!(prompt_block.contains("Naming directive"));
+        assert!(!prompt_block.contains("source_file"));
     }
 
     #[test]

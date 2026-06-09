@@ -46,6 +46,18 @@ AMADEUS_TTS_ENGINE=genie-onnx npm run dev
 
 For real Genie ONNX inference, first convert the private GPT-SoVITS checkpoints outside this repository, then run `tools/tts/genie_http_service.py` with the private paths described in `docs/tts-genie-onnx.md`.
 
+## Local Shinku Style Context
+
+Hermes replies can use a local Shinku style context without sending proprietary dialogue text to Hermes. By default, `AMADEUS_SHINKU_STYLE_MODE=rag-summary` reads the local style pack and `shinku_lines.tsv`, retrieves nearby source line ids, and injects only non-verbatim style summaries plus ids into the prompt.
+
+```sh
+AMADEUS_SHINKU_STYLE_MODE=rag-summary
+AMADEUS_SHINKU_STYLE_ROOT=/home/shinku/data/plan/soul-desktop-pet/style_pack/shinku-speech-style
+AMADEUS_SHINKU_LINES_PATH=/home/shinku/data/plan/soul-desktop-pet/shinku_lines/shinku_lines.tsv
+```
+
+Use `AMADEUS_SHINKU_STYLE_MODE=off` to disable style retrieval while keeping the user naming rule: `replyText` uses `悠马`, and `speechTextJa` uses `悠馬`.
+
 ## Local Private Character Image
 
 For local private prototyping, copy `.env.example` to `apps/desktop/.env.local` and set:
