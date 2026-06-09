@@ -1,10 +1,12 @@
 import { useEffect, useRef, useReducer } from "react";
+import type React from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { AssistantReply, ChatMessage, TtsSynthesisResult } from "@amadeus/core";
 import { buildSpeechJob, initialChatShellState, reduceChatShellState } from "./chat-shell";
 import { ensurePetWindowMode } from "./pet-window-mode";
 import { getPrivateCharacterImage } from "./private-character";
 import { dragCurrentWindow } from "./window-drag";
+import { resizeCurrentWindow } from "./window-resize";
 
 const CHAT_HISTORY_KEY = "amadeus.chat.history.v1";
 
@@ -140,6 +142,7 @@ export function App() {
 
   return (
     <main className="amadeus-shell" data-tauri-drag-region="deep" onMouseDown={dragCurrentWindow}>
+      <ResizeHandles />
       <section className="pet-stage" aria-label="Desktop pet" data-tauri-drag-region="deep">
         <div
           className={`character-frame emotion-${state.character.emotion} ${
@@ -197,6 +200,27 @@ export function App() {
         </button>
       </form>
     </main>
+  );
+}
+
+function ResizeHandles() {
+  function startResize(event: React.MouseEvent, direction: Parameters<typeof resizeCurrentWindow>[0]) {
+    event.preventDefault();
+    event.stopPropagation();
+    resizeCurrentWindow(direction);
+  }
+
+  return (
+    <div className="resize-handles" aria-hidden="true" data-tauri-drag-region="false">
+      <span className="resize-handle resize-n" onMouseDown={(event) => startResize(event, "North")} />
+      <span className="resize-handle resize-e" onMouseDown={(event) => startResize(event, "East")} />
+      <span className="resize-handle resize-s" onMouseDown={(event) => startResize(event, "South")} />
+      <span className="resize-handle resize-w" onMouseDown={(event) => startResize(event, "West")} />
+      <span className="resize-handle resize-ne" onMouseDown={(event) => startResize(event, "NorthEast")} />
+      <span className="resize-handle resize-nw" onMouseDown={(event) => startResize(event, "NorthWest")} />
+      <span className="resize-handle resize-se" onMouseDown={(event) => startResize(event, "SouthEast")} />
+      <span className="resize-handle resize-sw" onMouseDown={(event) => startResize(event, "SouthWest")} />
+    </div>
   );
 }
 

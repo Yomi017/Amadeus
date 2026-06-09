@@ -15,7 +15,6 @@
 
 body {
   margin: 0;
-  min-width: 320px;
   min-height: 100vh;
   overflow: hidden;
   background: transparent;
@@ -43,17 +42,97 @@ button:hover {
 
 .amadeus-shell {
   position: relative;
+  width: 100vw;
   min-height: 100vh;
-  padding: 8px;
+  padding: clamp(4px, 1.8vmin, 8px);
   overflow: hidden;
   -webkit-app-region: drag;
+}
+
+.resize-handles {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+  -webkit-app-region: no-drag;
+}
+
+.resize-handle {
+  position: absolute;
+  display: block;
+  pointer-events: auto;
+  -webkit-app-region: no-drag;
+}
+
+.resize-n,
+.resize-s {
+  right: 12px;
+  left: 12px;
+  height: 10px;
+  cursor: ns-resize;
+}
+
+.resize-e,
+.resize-w {
+  top: 12px;
+  bottom: 12px;
+  width: 10px;
+  cursor: ew-resize;
+}
+
+.resize-n {
+  top: 0;
+}
+
+.resize-e {
+  right: 0;
+}
+
+.resize-s {
+  bottom: 0;
+}
+
+.resize-w {
+  left: 0;
+}
+
+.resize-ne,
+.resize-nw,
+.resize-se,
+.resize-sw {
+  width: 18px;
+  height: 18px;
+}
+
+.resize-ne {
+  top: 0;
+  right: 0;
+  cursor: nesw-resize;
+}
+
+.resize-nw {
+  top: 0;
+  left: 0;
+  cursor: nwse-resize;
+}
+
+.resize-se {
+  right: 0;
+  bottom: 0;
+  cursor: nwse-resize;
+}
+
+.resize-sw {
+  bottom: 0;
+  left: 0;
+  cursor: nesw-resize;
 }
 
 .pet-stage {
   position: relative;
   display: grid;
-  min-height: calc(100vh - 70px);
-  padding-bottom: 76px;
+  min-height: 100vh;
+  padding-bottom: clamp(54px, 12vh, 76px);
   place-items: end center;
 }
 
@@ -61,7 +140,7 @@ button:hover {
   position: relative;
   display: grid;
   width: 100%;
-  min-height: calc(100vh - 160px);
+  min-height: min(72vh, calc(100vh - 96px));
   place-items: end center;
   overflow: visible;
 }
@@ -77,8 +156,8 @@ button:hover {
   display: block;
   width: auto;
   height: auto;
-  max-width: min(96vw, 540px);
-  max-height: calc(100vh - 160px);
+  max-width: min(94vw, 520px);
+  max-height: calc(100vh - clamp(96px, 20vh, 160px));
   object-fit: contain;
   object-position: center bottom;
   user-select: none;
@@ -195,10 +274,10 @@ button:hover {
 
 .reply-bubble {
   position: absolute;
-  top: 18px;
-  left: 12px;
+  top: clamp(8px, 2.4vh, 18px);
+  left: clamp(6px, 2vw, 12px);
   z-index: 3;
-  max-width: min(360px, calc(100vw - 24px));
+  max-width: min(360px, calc(100vw - 12px));
   border: 1px solid rgba(112, 74, 78, 0.16);
   border-radius: 8px;
   padding: 10px 12px;
@@ -211,7 +290,7 @@ button:hover {
 .reply-bubble p {
   margin: 0;
   color: #34282e;
-  font-size: 0.9rem;
+  font-size: clamp(0.78rem, 2.8vw, 0.9rem);
   font-weight: 700;
   overflow-wrap: anywhere;
 }
@@ -220,22 +299,22 @@ button:hover {
   display: block;
   margin-top: 6px;
   color: #8c6261;
-  font-size: 0.72rem;
+  font-size: clamp(0.64rem, 2.2vw, 0.72rem);
   font-weight: 800;
 }
 
 .quick-composer {
   position: absolute;
-  right: 8px;
-  bottom: 8px;
-  left: 8px;
+  right: clamp(4px, 1.8vmin, 8px);
+  bottom: clamp(4px, 1.8vmin, 8px);
+  left: clamp(4px, 1.8vmin, 8px);
   z-index: 5;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
+  gap: clamp(4px, 1.8vmin, 8px);
   border: 1px solid rgba(112, 74, 78, 0.16);
   border-radius: 8px;
-  padding: 8px;
+  padding: clamp(5px, 1.8vmin, 8px);
   background: rgba(255, 253, 249, 0.9);
   box-shadow: 0 16px 42px rgba(72, 53, 47, 0.16);
   backdrop-filter: blur(14px);
@@ -247,7 +326,8 @@ button:hover {
   min-width: 0;
   border: 1px solid rgba(112, 74, 78, 0.18);
   border-radius: 8px;
-  padding: 0 12px;
+  min-height: 34px;
+  padding: 0 clamp(8px, 2.5vw, 12px);
   background: rgba(255, 255, 255, 0.94);
   color: #2d272a;
   outline: none;
@@ -259,7 +339,42 @@ button:hover {
 }
 
 .quick-composer button {
-  padding: 0 12px;
+  min-width: 52px;
+  padding: 0 clamp(8px, 2.5vw, 12px);
+}
+
+@media (max-width: 300px), (max-height: 420px) {
+  .pet-stage {
+    padding-bottom: 48px;
+  }
+
+  .character-frame {
+    min-height: calc(100vh - 70px);
+  }
+
+  .private-character {
+    max-width: 98vw;
+    max-height: calc(100vh - 74px);
+  }
+
+  .reply-bubble {
+    max-height: 38vh;
+    overflow: hidden;
+    padding: 7px 8px;
+  }
+
+  .reply-bubble span {
+    display: none;
+  }
+
+  .quick-composer {
+    grid-template-columns: minmax(0, 1fr) 44px;
+  }
+
+  button,
+  .quick-composer input {
+    min-height: 32px;
+  }
 }
 
 @keyframes breathe {
