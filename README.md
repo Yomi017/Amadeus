@@ -48,7 +48,7 @@ For real Genie ONNX inference, first convert the private GPT-SoVITS checkpoints 
 
 ## Local Shinku Style Context
 
-Hermes replies can use a local Shinku style context without sending proprietary dialogue text to Hermes. By default, `AMADEUS_SHINKU_STYLE_MODE=rag-summary` reads the local style pack and `shinku_lines.tsv`, retrieves nearby source line ids, and injects only non-verbatim style summaries plus ids into the prompt.
+Hermes replies can use a local Shinku style context without sending proprietary dialogue text to Hermes. By default, `AMADEUS_SHINKU_STYLE_MODE=rag-summary` reads the local style pack and `shinku_lines.tsv`, retrieves nearby source line ids, and injects strong non-verbatim style prescriptions plus synthetic answer-shape examples into the prompt.
 
 ```sh
 AMADEUS_SHINKU_STYLE_MODE=rag-summary

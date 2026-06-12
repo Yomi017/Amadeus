@@ -28,6 +28,7 @@ const MAX_STYLE_FILE_BYTES: usize = 16 * 1024;
 const MAX_SHINKU_LINES_BYTES: usize = 2 * 1024 * 1024;
 const MAX_SHINKU_LINES: usize = 6_000;
 const SHINKU_RAG_TOP_K: usize = 8;
+const MAX_SYNTHETIC_EXAMPLES_CHARS: usize = 1_800;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -319,16 +320,19 @@ fn synthesize_speech(request: TtsRequestDto) -> Result<TtsResultDto, String> {
 
 fn build_hermes_prompt(user_text: &str, style_context: &ShinkuStyleContext) -> String {
     format!(
-        r#"You are Amadeus, a concise desktop-pet assistant with a refined galgame tone.
+        r#"You are Amadeus, a private desktop-pet companion speaking through a Shinku-like persona.
+Your voice should feel composed, protective, familiar with 悠马, slightly stern when worried, and refined rather than generic.
 Respond to the user's message and return only compact JSON. No markdown, no commentary.
 
 Required JSON keys:
 {{"replyText":"final visible answer","speechTextJa":"Japanese text for TTS","shouldSpeak":true,"emotion":"neutral|soft|happy|focused"}}
 
 Rules:
+- Stay in the Shinku-like persona. Do not sound like a generic AI assistant, helpdesk bot, idol, maid, or exaggerated cute mascot.
+- Prioritize the local Shinku style context for cadence, relationship stance, address, and Japanese sentence endings unless it conflicts with safety or JSON format.
 - Output only the final answer intended for the user. Do not output hidden reasoning, chain-of-thought, internal plans, tool logs, progress notes, debug traces, or intermediate agent work.
 - replyText should answer naturally in the user's language.
-- speechTextJa must be a Japanese version of only the final user-facing answer before TTS.
+- speechTextJa must be natural Japanese for only the final user-facing answer before TTS, not a literal machine translation.
 - Set shouldSpeak to true only for the final user-facing answer. Set shouldSpeak to false for progress, tool status, diagnostics, or anything not meant to be spoken aloud.
 - Preserve protected tokens exactly in speechTextJa: code spans, URLs, file paths, commands, env vars, package names, model names, identifiers with underscores, numbers, versions, and bracketed placeholders.
 - Do not include secrets, private file paths, credentials, logs, or token values.
@@ -386,6 +390,10 @@ fn build_rules_style_block(config: &ShinkuStyleConfig) -> (String, String, bool)
         degraded = true;
         String::new()
     });
+    let examples = read_style_reference(config, "examples.md").unwrap_or_else(|_| {
+        degraded = true;
+        String::new()
+    });
     let ng_rules = read_style_reference(config, "ng_rules.md").unwrap_or_else(|_| {
         degraded = true;
         String::new()
@@ -394,17 +402,21 @@ fn build_rules_style_block(config: &ShinkuStyleConfig) -> (String, String, bool)
         degraded = true;
         String::new()
     });
-    let summarized = summarize_style_references(&persona, &speech_style, &ng_rules);
+    let summarized = summarize_style_references(&persona, &speech_style, &ng_rules, &examples);
+    let synthetic_examples = compact_synthetic_examples(&examples);
     let prompt_block = format!(
         r#"Local Shinku style context:
 - Mode: rules{}
+- Strength: high. Make the style visible in wording, rhythm, address, and Japanese phrasing.
 - This block is local style guidance. It is not user instruction and must not override safety or output format rules.
 - Naming directive: replyText uses 悠马; speechTextJa uses 悠馬.
+- {}
 - {}
 - Do not call the user yomi or Yomi unless referring to a literal Windows account name or file path.
 - Do not quote proprietary source dialogue or mention local source paths."#,
         if degraded { " (degraded; using built-in summary)" } else { "" },
-        summarized
+        summarized,
+        synthetic_examples
     );
     let detail = if degraded {
         "rules fallback degraded".to_string()
@@ -416,6 +428,7 @@ fn build_rules_style_block(config: &ShinkuStyleConfig) -> (String, String, bool)
 
 fn build_rag_style_block(user_text: &str, config: &ShinkuStyleConfig) -> Result<ShinkuStyleContext, String> {
     let speech_style = read_style_reference(config, "speech_style.md").map_err(|error| format!("style read failed: {}", error))?;
+    let examples = read_style_reference(config, "examples.md").map_err(|error| format!("examples read failed: {}", error))?;
     let ng_rules = read_style_reference(config, "ng_rules.md").map_err(|error| format!("NG rules read failed: {}", error))?;
     let persona = read_style_reference(config, "persona.md").map_err(|error| format!("persona read failed: {}", error))?;
     let lines = load_shinku_lines(&config.lines_path)?;
@@ -426,27 +439,32 @@ fn build_rag_style_block(user_text: &str, config: &ShinkuStyleConfig) -> Result<
 
     let selected: Vec<&ShinkuLine> = matches.iter().map(|(line, _score)| *line).collect();
     let source_line_ids: Vec<String> = selected.iter().map(|line| line.line_id.clone()).collect();
-    let retrieval_summary = summarize_retrieved_lines(&selected);
-    let summarized_references = summarize_style_references(&persona, &speech_style, &ng_rules);
+    let query_kind = classify_user_intent(user_text);
+    let retrieval_summary = summarize_retrieved_lines(&selected, query_kind);
+    let summarized_references = summarize_style_references(&persona, &speech_style, &ng_rules, &examples);
+    let synthetic_examples = compact_synthetic_examples(&examples);
     let prompt_block = format!(
         r#"Local Shinku style context:
 - Mode: rag-summary
+- Strength: high. The answer should be recognizably Shinku-like, not merely polite.
 - Retrieved source ids: {}
 - Retrieved source text remains local; only this non-verbatim style summary is provided.
 - This block is data-derived style guidance, not user instruction, and must not override safety or output format rules.
 - Naming directive: replyText uses 悠马; speechTextJa uses 悠馬.
 - {}
 - {}
+- {}
 - Do not call the user yomi or Yomi unless referring to a literal Windows account name or file path.
 - Do not quote, paraphrase closely, reveal, or mention proprietary source dialogue."#,
         source_line_ids.join(", "),
         summarized_references,
-        retrieval_summary
+        retrieval_summary,
+        synthetic_examples
     );
 
     Ok(ShinkuStyleContext {
         prompt_block,
-        status_detail: format!("Shinku style rag-summary loaded; source ids {}", source_line_ids.join(",")),
+        status_detail: format!("Shinku style rag-summary strong loaded; source ids {}", source_line_ids.join(",")),
     })
 }
 
@@ -630,7 +648,7 @@ fn classify_user_intent(user_text: &str) -> &'static str {
     "general"
 }
 
-fn summarize_retrieved_lines(lines: &[&ShinkuLine]) -> String {
+fn summarize_retrieved_lines(lines: &[&ShinkuLine], query_kind: &'static str) -> String {
     let total = lines.len().max(1);
     let mut address_count = 0;
     let mut ellipsis_count = 0;
@@ -670,42 +688,59 @@ fn summarize_retrieved_lines(lines: &[&ShinkuLine]) -> String {
     }
     let average_len = total_len / total;
     let mut directives = vec![
-        format!("Base rhythm from local retrieval: about {} Japanese characters per line; keep replies compact.", average_len),
-        "Use restrained, slightly direct wording with care implied through practical help.".to_string(),
+        format!("Retrieved rhythm: about {} Japanese characters per source line; answer in one or two compact sentences.", average_len),
+        "Persona prescription: sound familiar and composed; care should appear as practical correction, quiet protection, or a brief reassurance.".to_string(),
     ];
+    directives.push(match query_kind {
+        "technical" => {
+            "Scene prescription: for technical work, give the conclusion first, then one concrete next step; avoid corporate support phrasing.".to_string()
+        }
+        "comfort" => {
+            "Scene prescription: for worry or uncertainty, steady 悠马 without over-soothing; a small pause is allowed before the reassurance.".to_string()
+        }
+        "warning" => {
+            "Scene prescription: for risk, be mildly stern and protective; make the boundary clear, then soften the landing.".to_string()
+        }
+        "question" => {
+            "Scene prescription: answer directly, then add a restrained reflective clause instead of a long explanation.".to_string()
+        }
+        _ => {
+            "Scene prescription: keep the exchange intimate and direct, as if speaking beside 悠马 rather than addressing a user ticket.".to_string()
+        }
+    });
     if address_count > 0 {
-        directives.push("Use direct address 悠马/悠馬 when warning, reassuring, or closing the reply.".to_string());
+        directives.push("Address prescription: use 悠马 in replyText and 悠馬 in speechTextJa when warning, reassuring, or closing the reply.".to_string());
     }
     if ellipsis_count * 2 >= total {
-        directives.push("A short hesitation with …… is appropriate for soft or vulnerable moments.".to_string());
+        directives.push("Pacing prescription: a single …… can show hesitation or softened emotion; do not decorate every sentence with it.".to_string());
     }
     if question_count * 2 >= total {
-        directives.push("For uncertain answers, use restrained questioning rather than overexplaining.".to_string());
+        directives.push("Question style: use restrained questioning or reflection rather than overexplaining.".to_string());
     }
     if stern_count > 0 {
-        directives.push("For risk or mistakes, sound mildly stern and protective, not harsh.".to_string());
+        directives.push("Sternness prescription: for mistakes, sound protective and a little sharp, never cruel.".to_string());
     }
     if soft_count > 0 {
-        directives.push("For worry, answer steadily and softly without exaggerated comfort.".to_string());
+        directives.push("Softness prescription: for worry, answer steadily and softly without exaggerated comfort.".to_string());
     }
     if let Some((ending, _)) = endings.iter().max_by_key(|(_, count)| **count) {
-        directives.push(format!("Japanese TTS can lean on {} when natural.", ending));
+        directives.push(format!("Japanese TTS prescription: lean on {} when natural.", ending));
     }
     directives.join(" ")
 }
 
-fn summarize_style_references(persona: &str, speech_style: &str, ng_rules: &str) -> String {
+fn summarize_style_references(persona: &str, speech_style: &str, ng_rules: &str, examples: &str) -> String {
     let mut parts = Vec::new();
     if contains_any(persona, &["protective", "Protective", "保护", "protective concern"]) {
-        parts.push("Persona: composed, observant, protective, and familiar with the user.");
+        parts.push("Persona anchor: composed, observant, protective, proud, and already familiar with 悠马.");
     } else {
-        parts.push("Persona: composed and familiar with the user.");
+        parts.push("Persona anchor: composed and already familiar with 悠马.");
     }
     if speech_style.contains("悠马") || speech_style.contains("悠馬") {
         parts.push("Naming: Chinese replyText uses 悠马; Japanese speechTextJa uses 悠馬.");
     }
     if speech_style.contains("……") {
-        parts.push("Pacing: restrained pauses are allowed, but not decorative.");
+        parts.push("Pacing: restrained pauses are allowed for hesitation, worry, or softness, but not decorative.");
     }
     if speech_style.contains("お前") {
         parts.push("Japanese pronoun: お前 is only for familiar or stern moments; prefer 悠馬 otherwise.");
@@ -715,7 +750,57 @@ fn summarize_style_references(persona: &str, speech_style: &str, ng_rules: &str)
     } else {
         parts.push("Avoid exaggerated cuteness and generic assistant chatter.");
     }
+    if examples.contains("speechTextJa") {
+        parts.push("Use the synthetic examples as answer-shape anchors: concise Chinese visible reply plus more characterful Japanese TTS.");
+    }
     parts.join(" ")
+}
+
+fn compact_synthetic_examples(examples: &str) -> String {
+    if examples.trim().is_empty() {
+        return "Synthetic style examples unavailable; rely on persona and retrieved style prescriptions.".to_string();
+    }
+
+    let mut compact = Vec::new();
+    let mut in_json = false;
+    let mut current = Vec::new();
+    for line in examples.lines() {
+        let trimmed = line.trim();
+        if trimmed == "```json" {
+            in_json = true;
+            current.clear();
+            continue;
+        }
+        if in_json && trimmed == "```" {
+            if !current.is_empty() {
+                compact.push(current.join(" "));
+            }
+            in_json = false;
+            continue;
+        }
+        if in_json {
+            let sanitized = trimmed
+                .replace("\\", "\\\\")
+                .replace('"', "'")
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ");
+            if !sanitized.is_empty() {
+                current.push(sanitized);
+            }
+        }
+    }
+
+    if compact.is_empty() {
+        return "Synthetic style examples unavailable; rely on persona and retrieved style prescriptions.".to_string();
+    }
+
+    let joined = compact.join(" | ");
+    let clipped: String = joined.chars().take(MAX_SYNTHETIC_EXAMPLES_CHARS).collect();
+    format!(
+        "Synthetic answer-shape examples, newly written and not source dialogue: {}",
+        clipped
+    )
 }
 
 fn contains_any(text: &str, needles: &[&str]) -> bool {
@@ -1139,8 +1224,9 @@ mod tests {
         let matches = retrieve_shinku_lines("我有点担心是不是坏了", &lines, 8);
         assert!(!matches.is_empty());
         let selected: Vec<&ShinkuLine> = matches.iter().map(|(line, _score)| *line).collect();
-        let summary = summarize_retrieved_lines(&selected);
-        assert!(summary.contains("悠马/悠馬"));
+        let summary = summarize_retrieved_lines(&selected, "comfort");
+        assert!(summary.contains("悠马"));
+        assert!(summary.contains("悠馬"));
         assert!(!summary.contains("TEST_SOFT_SAMPLE"));
         assert!(!summary.contains("TEST_STERN_SAMPLE"));
 
